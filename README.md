@@ -197,7 +197,8 @@ locals_get → int argc = 0n1 ; char ** argv = 0x0000018f`55667150 ; bool waitMo
 | 工具 | 作用 |
 |---|---|
 | `debug_launch` / `debug_attach` | 启动 exe（停在初始断点）或附加到 PID |
-| `debug_continue` / `debug_step` / `debug_break` | 继续 / 单步（into·over·out）/ 打断 |
+| `debug_continue` / `debug_step` | 继续 / 单步（into·over·out） |
+| `debug_break` | 打断。目标卡在模态框里时 `.break` 不起作用，会自动改用 `DebugBreakProcess` 注入，并 dump 所有线程栈（能直接看到 `USER32!MessageBoxW` 那一帧） |
 | `breakpoint_set` / `list` / `remove` | 断点，支持条件表达式；符号没加载时自动降级为 `bu` |
 | `stack_get` | 调用栈，解析成 `{frame, returnAddress, symbol, file, line}` |
 | `locals_get` | 局部变量（含类型与地址） |
@@ -252,14 +253,18 @@ Windows SDK 里没装 Debugging Tools。装的时候勾「Debugging Tools for Wi
 
 **9. 服务莫名其妙没了 / 第二天发现连不上**
 装常驻任务（见上一节）。这类问题基本是系统更新或安全软件连带杀的进程，watchdog 会拉起来。
+（作者亲历：一次 Windows 安全平台更新连带杀掉了整批进程，包括桥、远程桌面和 DSH 自己。）
 
-**10. GitHub 上不去**
+**10. 程序跑着跑着不动了，`debug_continue` 一直返回 `state=running`**
+多半是目标弹了个模态框（assert / MessageBox），线程卡在消息循环里。这是**被调试程序**卡住，不是桥卡住。
+调用 `debug_break`：它会注入断点并 dump 所有线程栈，你能直接看到 `USER32!MessageBoxW → 你的函数`，
+定位后 `debug_stop` 结束进程即可。
+
+**11. GitHub 上不去**
 用镜像：`git clone https://gh.223456.xyz/github.com/aaalzk/dsh2vs.git`。
 
 ## 已知限制
 
-- 目标程序参数**以 `-` 开头**时可能被 cdb 当成自己的选项吃掉（cdb 里 `--` 是选项组合，不是分隔符）。
-  普通路径类参数不受影响。
 - 源码行断点在「初始断点」阶段设置可能退化成延迟断点而不生效 —— 建议按符号下断，或第一次停下后再设。
 - 函数入口处 `locals_get` 会显示垃圾值（cdb 固有行为，步入函数体后正常）。
 - `debug_break` 在目标高速运行时可能延迟返回，随后用 `debug_status` 确认。

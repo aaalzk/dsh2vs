@@ -42,6 +42,9 @@ public sealed class CdbSession : IAsyncDisposable
 
     public string Target { get; }
 
+    /// <summary>Debuggee process id, parsed from cdb's first event line "(pid.thread)".</summary>
+    public int? TargetPid { get; private set; }
+
     public DateTimeOffset LastUsedAt { get; private set; }
 
     public DebuggerState State { get; private set; } = DebuggerState.Running;
@@ -93,7 +96,83 @@ public sealed class CdbSession : IAsyncDisposable
             .ConfigureAwait(false);
 
         session.State = stopped ? DebuggerState.Stopped : DebuggerState.Running;
+        session.TargetPid = TryParsePid(session.Snapshot());
         return session;
+    }
+
+    /// <summary>Returns everything the debugger has printed so far (used for banner parsing).</summary>
+    private string Snapshot()
+    {
+        lock (_gate)
+        {
+            return _buffer.ToString();
+        }
+    }
+
+    private static readonly Regex EventPidPattern = new(@"\((?<pid>[0-9a-f]{1,8})\.[0-9a-f]{1,8}\)", RegexOptions.Compiled);
+
+    internal static int? TryParsePid(string text)
+    {
+        var matches = EventPidPattern.Matches(text);
+        if (matches.Count == 0)
+        {
+            return null;
+        }
+
+        var last = matches[^1].Groups["pid"].Value;
+        return int.TryParse(last, System.Globalization.NumberStyles.HexNumber, null, out var pid) ? pid : null;
+    }
+
+    /// <summary>
+    /// Interrupts a running target.
+    ///
+    /// cdb's ".break" only works when the target is in ordinary user code: a thread blocked in a
+    /// modal message loop (MessageBox / assert dialog) never returns to a state where the queued
+    /// command is processed. Falling back to DebugBreakProcess injects a break from outside, which
+    /// always produces a debug event.
+    /// </summary>
+    public async Task<CdbResult> InterruptAsync(TimeSpan settleTimeout, CancellationToken cancellationToken)
+    {
+        int promptBefore;
+        lock (_gate)
+        {
+            promptBefore = _lastPromptEnd;
+        }
+
+        var result = await ExecuteAsync(".break", TimeSpan.FromSeconds(3), cancellationToken).ConfigureAwait(false);
+        if (result.PromptReturned)
+        {
+            return result;
+        }
+
+        if (TargetPid is null)
+        {
+            TargetPid = TryParsePid(Snapshot());
+        }
+
+        if (TargetPid is int pid && Native.DebugBreakProcess(pid))
+        {
+            var stopped = await WaitForPromptAsync(promptBefore, settleTimeout, cancellationToken).ConfigureAwait(false);
+            if (stopped)
+            {
+                var stopEvent = await ExecuteAsync(".lastevent", TimeSpan.FromSeconds(5), cancellationToken)
+                    .ConfigureAwait(false);
+
+                // The injected break lands on the temporary remote-break thread (ntdll!DbgBreakPoint),
+                // which says nothing about why the target was stuck. Dump every thread so the real
+                // blocking frame (e.g. USER32!MessageBoxW) is visible immediately.
+                var allThreads = await ExecuteAsync("~*k", TimeSpan.FromSeconds(15), cancellationToken)
+                    .ConfigureAwait(false);
+
+                var combined = stopEvent.Text +
+                               "\n\n[all threads at the moment of the injected break]\n" +
+                               allThreads.Text;
+
+                return new CdbResult(combined, true, DebuggerState.Stopped);
+            }
+        }
+
+        return result;
     }
 
     public async Task<CdbResult> ExecuteAsync(string command, TimeSpan timeout, CancellationToken cancellationToken)

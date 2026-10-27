@@ -112,9 +112,31 @@ public sealed class DebugTools
     }
 
     [McpServerTool(Name = "debug_break")]
-    [Description("Interrupt a running target and wait until it stops.")]
-    public Task<string> DebugBreak() =>
-        Run(".break", 15000, "break");
+    [Description(
+        "Interrupt a running target and wait until it stops. Works even when the target is blocked in a modal " +
+        "dialog (MessageBox / assert): if the queued .break is not processed, the bridge injects a break from outside.")]
+    public async Task<string> DebugBreak()
+    {
+        var session = _debug.Current;
+        if (session is null)
+        {
+            return Error("No active debug session. Call debug_launch or debug_attach first.");
+        }
+
+        var result = await session
+            .InterruptAsync(TimeSpan.FromSeconds(10), CancellationToken.None)
+            .ConfigureAwait(false);
+
+        return Json.Serialize(new
+        {
+            ok = true,
+            action = "break",
+            state = result.State.ToString().ToLowerInvariant(),
+            promptReturned = result.PromptReturned,
+            targetPid = session.TargetPid,
+            text = Trim(result.Text, 12000),
+        });
+    }
 
     [McpServerTool(Name = "debug_continue")]
     [Description(
