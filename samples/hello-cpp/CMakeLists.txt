@@ -9,3 +9,7 @@ target_include_directories(math_util PUBLIC src)
 
 add_executable(hello src/main.cpp)
 target_link_libraries(hello PRIVATE math_util)
+
+# Debugging fixture: long enough to attach to, with a loop worth breaking into.
+add_executable(loopy src/loopy.cpp)
+target_link_libraries(loopy PRIVATE math_util)

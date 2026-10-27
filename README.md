@@ -81,6 +81,24 @@ MCP 端点在 `http://127.0.0.1:8790/mcp`（streamable-http，无状态，可随
 | `build_errors` | 重读上次构建的诊断，不必重新编译 |
 | `vs_status` | 服务状态、解析到的 MSBuild、当前解决方案、上次构建结果 |
 
+调试（M2，基于 cdb）：
+
+| 工具 | 作用 |
+|---|---|
+| `debug_launch` | 以 cdb 启动 exe，停在初始断点，便于先下断点再跑 |
+| `debug_attach` | 按 PID 附加（目标映像需在工作区内） |
+| `debug_continue` | `g`，等到断点/异常/退出，或超时返回 `state=running` |
+| `debug_step` | `into` / `over` / `out` 单步 |
+| `debug_break` | `.break` 打断正在运行的目标 |
+| `breakpoint_set` | `bp`（解析失败自动降级为延迟断点 `bu`），支持条件表达式 |
+| `breakpoint_list` / `breakpoint_remove` | `bl` / `bc` |
+| `stack_get` | 调用栈，解析成 `{frame, returnAddress, symbol, file, line}` |
+| `locals_get` | `dv /t /v`，带类型与地址的局部变量 |
+| `evaluate` | `??` C++ 表达式求值 |
+| `threads_get` / `modules_get` / `memory_read` | `~` / `lm` / `db` |
+| `debug_stop` | 结束会话并杀掉被调试进程（不留孤儿） |
+| `debug_execute` | 逃生口：任意 cdb 命令（`!analyze -v`、`.exr -1`、`k`…） |
+
 ## 实测（M1）
 
 `samples/hello-cpp`（CMake → VS 2022 解决方案）：
@@ -94,14 +112,49 @@ rebuild       → success, 4801 ms
 运行 hello.exe → add(7, 6) = 13 / multiply(7, 6) = 42 / divide(3.0, 4.0) = 0.750
 ```
 
-单元测试 8 个全绿（日志解析 6 + 解决方案解析 2）。
+单元测试 15 个全绿（日志解析 6 + 解决方案解析 2 + cdb 输出解析 7）。
+
+## 实测（M2 调试，`loopy.exe`）
+
+```
+debug_launch   → 停在初始断点，state=stopped
+breakpoint_set → loopy!main
+debug_continue → Breakpoint 0 hit，state=stopped
+debug_step     → over 生效，逐行推进
+stack_get      → 5 帧：loopy!main+0x5 / invoke_main+0x39 / __scrt_common_main_seh+0x132 …
+locals_get     → int argc = 0n1 ; char ** argv = 0x0000018f`55667150 ; bool waitMode = false
+evaluate       → argc → int 0n1
+breakpoint_list→ " 0 e 00007ff6`54061540 0001 (0001) 0:**** loopy!main"
+debug_stop     → 会话关闭，cdb/loopy 残留进程数 = 0
+```
 
 ## 路线图
 
-- **M1 已完成** — 项目加载、构建、结构化诊断、配置切换
-- **M2 进行中** — 调试：`cdb.exe` / dbgeng 会话，断点、继续、单步、调用栈、局部变量、表达式求值
-- **M3** — dump 保存、`!analyze` 崩溃取证
-- **M4（可选）** — DTE 通道：在 VS 里打开解决方案、把调试交接给你的 VS 实例旁观
+- **M1 完成** — 项目加载、构建、结构化诊断、配置切换
+- **M2 完成（beta）** — cdb 调试会话：启动/附加、断点、单步、栈、局部变量、求值、线程、模块、内存、停止
+- **M3 待做** — dump 保存、`!analyze` 崩溃取证
+- **M4 待做** — DTE 通道：在 VS 里打开解决方案、调试交接给你的 VS 实例旁观
+
+## 常驻与自愈
+
+```powershell
+# 注册「登录自启 + 每 5 分钟探活重启」两个计划任务
+.\scripts\install-service.ps1 -Workspace D:\Projects\YourRepo
+
+.\scripts\install-service.ps1 -Status      # 查看状态
+.\scripts\install-service.ps1 -Uninstall   # 移除
+```
+
+`watchdog.ps1` 探 `/healthz`，不通就重新拉起服务并写 `artifacts/watchdog.log`。
+这层是专门为「Windows 更新 / 会话异常 / 误点导致进程消失」准备的：桥挂了会自己回来。
+
+## 已知限制
+
+- 目标程序参数**以 `-` 开头时可能被 cdb 当成自己的选项吃掉**（`--` 在 cdb 里是选项组合，不是分隔符）。普通路径类参数正常。
+- 源码行断点若在「初始断点」处设置，会退化成延迟断点且可能不生效；建议按符号下断（`module!func`），或在第一次停下后再设。
+- 函数入口（序言尚未执行）时 `locals_get` 会读到垃圾值 —— cdb 的固有行为，步入函数体后正常。
+- `debug_break` 在目标高速运行时可能延后才返回；随后用 `debug_status` 确认状态更稳。
+- cdb 调试器与 VS 调试器不能同时挂同一进程，需要「你旁观」时先 `debug_stop` 再在 VS 里附加。
 
 ## 环境要求
 

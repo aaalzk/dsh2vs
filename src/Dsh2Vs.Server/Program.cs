@@ -1,5 +1,6 @@
 using Dsh2Vs.Build;
 using Dsh2Vs.Core;
+using Dsh2Vs.Debug;
 using Dsh2Vs.Server;
 using Dsh2Vs.Server.Tools;
 using ModelContextProtocol.AspNetCore;
@@ -18,12 +19,17 @@ options.WorkspaceRoot = Path.GetFullPath(
         ? Directory.GetCurrentDirectory()
         : options.WorkspaceRoot);
 
+var debugOptions = builder.Configuration.GetSection("Dsh2Vs:Debug").Get<DebugOptions>() ?? new DebugOptions();
+
 builder.Services.AddSingleton(options);
+builder.Services.AddSingleton(debugOptions);
 builder.Services.AddSingleton<MsBuildLocator>();
 builder.Services.AddSingleton<SolutionParser>();
 builder.Services.AddSingleton<ProjectInspector>();
 builder.Services.AddSingleton<MsBuildRunner>();
 builder.Services.AddSingleton<VsState>();
+builder.Services.AddSingleton<CdbLocator>();
+builder.Services.AddSingleton<DebugSessionManager>();
 
 // Stateless HTTP: every request is self-contained, so a client reconnect after a server restart
 // (or after the user clicks something) never hits a stale Mcp-Session-Id.
@@ -32,7 +38,8 @@ builder.Services
     .WithHttpTransport(o => o.SessionMode = HttpServerSessionMode.Stateless)
     .WithTools<StatusTools>()
     .WithTools<ProjectTools>()
-    .WithTools<BuildTools>();
+    .WithTools<BuildTools>()
+    .WithTools<DebugTools>();
 
 var app = builder.Build();
 

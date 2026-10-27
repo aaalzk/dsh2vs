@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Dsh2Vs.Build\Dsh2Vs.Build.csproj" />
+    <ProjectReference Include="..\Dsh2Vs.Debug\Dsh2Vs.Debug.csproj" />
   </ItemGroup>
 
   <ItemGroup>

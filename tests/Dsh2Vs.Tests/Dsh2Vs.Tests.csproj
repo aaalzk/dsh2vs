@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Dsh2Vs.Build\Dsh2Vs.Build.csproj" />
+    <ProjectReference Include="..\..\src\Dsh2Vs.Debug\Dsh2Vs.Debug.csproj" />
   </ItemGroup>
 
 </Project>
