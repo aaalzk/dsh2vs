@@ -1,4 +1,4 @@
-# dsh-plugin.org 收录申请（存档）
+﻿# dsh-plugin.org 收录申请（存档）
 
 提交于 dsh-plugin.org 的插件市场，issue：<https://github.com/dshplugin/dsh-plugin-hub/issues/502>
 
@@ -10,7 +10,7 @@
 |---|---|
 | 公开仓库 | <https://github.com/aaalzk/dsh2vs> |
 | GitHub topic `dsh-plugin` | 已添加（另有 mcp / visual-studio / cpp / msbuild / debugger / windows） |
-| README 含安装命令 | `dsh plugin --profile web add github:aaalzk/dsh2vs` |
+| README 含安装命令 | `dsh plugin --profile web add dsh2vs` |
 | 导出 `apply(ctx)` | `index.js`（配置型 bundle，`apply` 为空实现，业务在 .NET 桥进程） |
 | 根目录 `package.json` | 已添加，声明 `dsh.bundle.patch` |
 | 能力分类（11 类选一） | 集成与连接 |
@@ -32,7 +32,7 @@ Visual Studio 开着、不会被「项目已过期，是否重新生成」这类
 
 ### 安装命令
 ```
-dsh plugin --profile web add github:aaalzk/dsh2vs
+dsh plugin --profile web add dsh2vs
 ```
 
 ### 兼容与运行要求
@@ -52,7 +52,8 @@ dsh plugin --profile web add github:aaalzk/dsh2vs
 ## 待办
 
 - [ ] 审核通过后：把 `https://dsh-plugin.org/plugins/aaalzk/dsh2vs` 回填到 README 徽章
-- [ ] 发布 NPM 包后，安装命令可简化为 `dsh plugin --profile web add dsh2vs`，
+- [x] NPM 包已发布（`dsh2vs@0.1.0`），安装命令已是 `dsh plugin --profile web add dsh2vs`，
       才会出现在 DSH 内的「插件中心」
 - [ ] 补一张真实截图或 GIF（Plugin Manager 里的插件条目 + 一次 build→debug 会话）
+
 

@@ -1,4 +1,4 @@
-# dsh2vs
+﻿# dsh2vs
 
 <!-- 收录到 dsh-plugin.org 之后放开下面这行（详情页地址见 docs/marketplace-submission.md）
 [![Listed on dsh-plugin.org](https://dsh-plugin.org/badges/listed.svg)](https://dsh-plugin.org/plugins/aaalzk/dsh2vs)
@@ -14,12 +14,10 @@
 ## 作为 DSH 插件安装（一条命令）
 
 ```powershell
-# 现在就能用（源码安装）
-dsh plugin --profile web add github:aaalzk/dsh2vs
-
-# npm 包发布后更短（届时这条才会生效）
 dsh plugin --profile web add dsh2vs
 ```
+
+（网络不通 npm 时可用源码安装：`dsh plugin --profile web add dsh2vs`）
 
 装完重启会话，`mcp__vs__*` 那 40+ 个工具就直接可用（插件会把 MCP 连接自动接到
 `http://127.0.0.1:8790/mcp`）。**桥本身要先跑起来**（见下面「三分钟跑起来」）。
@@ -186,7 +184,7 @@ curl.exe http://127.0.0.1:8790/healthz
 **方式 A（推荐）：装成插件，自动接好**
 
 ```powershell
-dsh plugin --profile web add github:aaalzk/dsh2vs
+dsh plugin --profile web add dsh2vs
 ```
 
 插件的 `cordis.patch.yml` 会替你做下面这段配置，重启会话即可。
@@ -488,5 +486,6 @@ git clone https://gh.223456.xyz/github.com/<任意仓库>.git
 ## 许可证
 
 MIT © 2026 aaalzk
+
 
 

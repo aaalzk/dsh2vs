@@ -1,8 +1,11 @@
-# 发布 npm 包（dsh plugin 命令行安装）
+﻿# 发布 npm 包（dsh plugin 命令行安装）
+
+> **状态：已发布** —— `dsh2vs@0.1.0` 于 2026-10-28 上线（maintainer aaalzk）。
+> 本文保留为下次发版的 runbook。
 
 目标：让 `dsh plugin --profile web add dsh2vs` 可用，并进入 DSH 内的「插件中心」。
 
-## 现状
+## 现状（发布前记录）
 
 - 包名 **`dsh2vs`** 在 npmjs **可用**（查询 `https://registry.npmjs.org/dsh2vs` → 404）
 - 打包内容已验证：8 个文件 / 14.5 kB
@@ -10,7 +13,8 @@
   LICENSE  README.md  package.json
   cordis.patch.yml  index.js  icon.svg  locale/en.json  locale/zh.json
   ```
-- **本机 npm 未登录**（`npm whoami` → ENEEDAUTH），所以还不能发布
+- 发布时 npm 账号 2FA 为 `auth-and-writes`，**只支持 security key**：新配置已无法添加 TOTP 认证器；
+pm publish 会打印 `Authenticate your account at: https://www.npmjs.com/auth/cli/<id>`，插 key 后 CLI 自动完成
 
 ## 两个环境坑（这台机器上真实存在）
 
@@ -66,3 +70,4 @@ dsh plugin --profile web add dsh2vs
 | 只改 README / 文案 | patch（0.1.1） |
 | 加工具、加诊断能力 | minor（0.2.0） |
 | 破坏配置或工具签名 | major（1.0.0） |
+
