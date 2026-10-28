@@ -98,6 +98,10 @@ debug_preflight executable=build\bin\Debug\ZoneServer.exe
 
 > 注意：目标若在**程序自己的** MessageA/assert 里卡住，那不是启动失败 —— 用 `debug_break`（见上）。
 
+> 另一个坑：**不要在调试器外直接运行缺 DLL 的 exe**。加载器会弹「系统错误」硬对话框，而且进程死后
+> 这个框由 csrss 接管、会一直挂在远程桌面上挡着。验证缺 DLL 一律用 `debug_preflight`（不起进程）或
+> `debug_launch`（调试器接管时不会弹框）。真弹了：结束进程 + 给窗口发 `WM_CLOSE`。
+
 ## 4. 崩溃取证
 
 **默认已经自动化**：`debug_continue` / `debug_step` 一旦发现目标停在异常上（不是普通断点），会自己
