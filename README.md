@@ -200,6 +200,7 @@ locals_get → int argc = 0n1 ; char ** argv = 0x0000018f`55667150 ; bool waitMo
 | `debug_continue` / `debug_step` | 继续 / 单步（into·over·out） |
 | `debug_break` | 打断。目标卡在模态框里时 `.break` 不起作用，会自动改用 `DebugBreakProcess` 注入，并 dump 所有线程栈（能直接看到 `USER32!MessageBoxW` 那一帧） |
 | `breakpoint_set` / `list` / `remove` | 断点，支持条件表达式；符号没加载时自动降级为 `bu` |
+| `exception_set` / `exception_list` | 异常断点：`sxe/sxd/sxn/sxi`，比如 `event=av mode=break` 让程序在第一次访问越界时就停 |
 | `stack_get` | 调用栈，解析成 `{frame, returnAddress, symbol, file, line}` |
 | `locals_get` | 局部变量（含类型与地址） |
 | `evaluate` | C++ 表达式求值 |
@@ -231,6 +232,14 @@ locals_get → int argc = 0n1 ; char ** argv = 0x0000018f`55667150 ; bool waitMo
 
 > 这一层走 DTE（COM），通过 Windows PowerShell 5.1 调 —— 不改你的 VS 状态就没有副作用；
 > 但 `vs_dte_open` / `vs_dte_build` 确实会改变 VS 里打开的东西，无人值守时优先用普通的 `build` 工具。
+
+## 给 agent 的操作手册（Skill）
+
+仓库里带了 `skills/dsh2vs/SKILL.md` —— 面向 AI agent 的完整操作流程：编译回路、调试回路、
+卡在弹窗怎么办、崩溃取证、VS 联动、工作区规则，以及一张踩过的坑对照表。
+
+装到 DSH：把这个目录放到 `~/.dsh/skills/` 下（或直接让 agent 读文件路径），
+下次遇到 C++ 构建/调试任务就会照着流程走，不用每次重新摸索。
 
 ## 多工作区（一个服务管多个仓库）
 

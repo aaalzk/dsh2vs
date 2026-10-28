@@ -25,6 +25,8 @@ public sealed class VsDteClient
         string? path = null,
         int? processId = null,
         int timeoutSeconds = 300,
+        string? pane = null,
+        int? maxChars = null,
         CancellationToken cancellationToken = default)
     {
         if (!File.Exists(ScriptPath))
@@ -55,6 +57,18 @@ public sealed class VsDteClient
         {
             args.Add("-ProcessId");
             args.Add(pid.ToString(CultureInfo.InvariantCulture));
+        }
+
+        if (!string.IsNullOrWhiteSpace(pane))
+        {
+            args.Add("-Pane");
+            args.Add(pane!);
+        }
+
+        if (maxChars is int chars)
+        {
+            args.Add("-MaxChars");
+            args.Add(chars.ToString(CultureInfo.InvariantCulture));
         }
 
         args.Add("-TimeoutSeconds");

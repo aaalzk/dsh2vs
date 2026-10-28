@@ -67,6 +67,28 @@ public sealed class VsDteTools
         return result.Json;
     }
 
+    [McpServerTool(Name = "vs_dte_output")]
+    [Description(
+        "Read Visual Studio's Output window panes (Build / Debug / Tests ...). Returns the tail of each pane " +
+        "so you can see what VS printed, including messages from libraries that do not go through the bridge.")]
+    public async Task<string> Output(
+        [Description("Only this pane (case-insensitive substring), e.g. 'Build'. Optional.")] string? pane = null,
+        [Description("Max characters per pane. Default 6000.")] int maxChars = 6000)
+    {
+        try
+        {
+            var result = await _dte
+                .RunAsync("output", pane: pane, maxChars: Math.Clamp(maxChars, 200, 100000))
+                .ConfigureAwait(false);
+
+            return result.Json;
+        }
+        catch (Exception ex)
+        {
+            return Error(ex.Message);
+        }
+    }
+
     [McpServerTool(Name = "vs_dte_attach")]
     [Description(
         "Hand a running process over to Visual Studio's debugger so the user can watch it. " +

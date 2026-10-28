@@ -12,7 +12,9 @@ param(
     [Parameter(Mandatory = $true)][string]$Action,
     [string]$Path,
     [int]$ProcessId = 0,
-    [int]$TimeoutSeconds = 300
+    [int]$TimeoutSeconds = 300,
+    [string]$Pane,
+    [int]$MaxChars = 6000
 )
 
 $ErrorActionPreference = 'Stop'
@@ -94,6 +96,49 @@ switch ($Action.ToLowerInvariant()) {
         Emit @{ ok = $true; count = $items.Count; items = $items }
     }
 
+    'output' {
+        $panes = @()
+        try {
+            foreach ($p in $dte.ToolWindows.OutputWindow.OutputWindowPanes) {
+                if ($Pane -and ($p.Name -notlike "*$Pane*")) { continue }
+
+                $text = ''
+                try {
+                    $doc = $p.TextDocument
+                    $endPoint = $doc.EndPoint.CreateEditPoint()
+                    $lineCount = $doc.EndPoint.Line
+                    $startLine = [Math]::Max(1, $lineCount - 400)
+                    $startPoint = $doc.StartPoint.CreateEditPoint()
+                    $startPoint.MoveToLineAndOffset($startLine, 1)
+                    $text = $endPoint.GetText($startPoint)
+                }
+                catch {
+                    $text = "<unreadable: $($_.Exception.Message)>"
+                }
+
+                if ($text -and $text.Length -gt $MaxChars) {
+                    $text = $text.Substring($text.Length - $MaxChars)
+                }
+
+                $panes += @{ name = $p.Name; chars = $text.Length; text = $text }
+            }
+        }
+        catch {
+            Emit @{ ok = $false; error = "output window unreadable: $($_.Exception.Message)" }
+            exit 1
+        }
+        if ($panes.Count -eq 0) {
+            Emit @{
+                ok    = $true
+                panes = @()
+                note  = 'Visual Studio returned no output panes to this out-of-process DTE client (VS 2022 17.14). Use the bridge build log or debug_execute for the same information.'
+            }
+        }
+        else {
+            Emit @{ ok = $true; panes = $panes }
+        }
+    }
+
     'attach' {
         $process = $dte.Debugger.LocalProcesses | Where-Object { $_.ProcessID -eq $ProcessId } | Select-Object -First 1
         if ($null -eq $process) {
@@ -114,3 +159,4 @@ switch ($Action.ToLowerInvariant()) {
         exit 2
     }
 }
+

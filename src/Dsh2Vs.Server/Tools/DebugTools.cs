@@ -153,6 +153,32 @@ public sealed class DebugTools
         }
     }
 
+    [McpServerTool(Name = "exception_set")]
+    [Description(
+        "Control how the debugger reacts to an exception event. mode=break stops on first chance (like VS " +
+        "'break when thrown'), second stops only on second chance, notify logs the first chance and keeps running, " +
+        "ignore disables it. event uses cdb names: av (access violation), eh (C++ exception), clr, int3, * (all). " +
+        "Example: exception_set(event='av', mode='break') gets you the fault before Windows shows any dialog.")]
+    public Task<string> ExceptionSet(
+        [Description("Exception event, e.g. av, eh, clr, int3, or * for all.")] string @event,
+        [Description("break | second | notify | ignore")] string mode = "break")
+    {
+        var command = mode.ToLowerInvariant() switch
+        {
+            "break" or "first" => "sxe",
+            "second" => "sxd",
+            "notify" => "sxn",
+            "ignore" => "sxi",
+            _ => throw new ArgumentException("mode must be break, second, notify or ignore"),
+        };
+
+        return Run($"{command} {@event}", 15000, "exception_set");
+    }
+
+    [McpServerTool(Name = "exception_list")]
+    [Description("List the current first-chance / second-chance exception settings ('sx').")]
+    public Task<string> ExceptionList() => Run("sx", 20000, "exception_list");
+
     [McpServerTool(Name = "debug_launch")]
     [Description(
         "Start a C++ executable under the cdb debugger and stop at the initial breakpoint, so breakpoints can be set " +
