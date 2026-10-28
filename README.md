@@ -1,4 +1,7 @@
-﻿# dsh2vs
+# dsh2vs
+
+[![npm version](https://img.shields.io/npm/v/dsh2vs.svg)](https://www.npmjs.com/package/dsh2vs)
+[![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 <!-- 收录到 dsh-plugin.org 之后放开下面这行（详情页地址见 docs/marketplace-submission.md）
 [![Listed on dsh-plugin.org](https://dsh-plugin.org/badges/listed.svg)](https://dsh-plugin.org/plugins/aaalzk/dsh2vs)
