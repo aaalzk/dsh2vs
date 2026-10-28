@@ -14,12 +14,143 @@ public sealed class DebugTools
     private readonly VsState _state;
     private readonly DebugSessionManager _debug;
     private readonly DebugOptions _options;
+    private readonly CrashAnalyzer _analyzer;
 
-    public DebugTools(VsState state, DebugSessionManager debug, DebugOptions options)
+    public DebugTools(VsState state, DebugSessionManager debug, DebugOptions options, CrashAnalyzer analyzer)
     {
         _state = state;
         _debug = debug;
         _options = options;
+        _analyzer = analyzer;
+    }
+
+    [McpServerTool(Name = "dump_save")]
+    [Description(
+        "Write a full user-mode minidump of the current debuggee ('.dump /ma'). Call it while stopped, e.g. right " +
+        "after a crash, then hand the file to crash_analyze or debug_open_dump. " +
+        "Default location: %LOCALAPPDATA%\\dsh2vs\\dumps.")]
+    public async Task<string> DumpSave(
+        [Description("Full output path for the .dmp. Optional.")] string? path = null,
+        [Description("File name only, used when path is omitted (e.g. abort-01.dmp). Optional.")] string? fileName = null)
+    {
+        var session = _debug.Current;
+        if (session is null)
+        {
+            return Error("No active debug session. Call debug_launch or debug_open_dump first.");
+        }
+
+        string full;
+        if (!string.IsNullOrWhiteSpace(path))
+        {
+            full = Path.GetFullPath(path);
+        }
+        else
+        {
+            var dir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "dsh2vs",
+                "dumps");
+            Directory.CreateDirectory(dir);
+
+            var name = string.IsNullOrWhiteSpace(fileName)
+                ? $"{SafeName(Path.GetFileNameWithoutExtension(session.Target))}-{DateTime.Now:yyyyMMdd-HHmmss}.dmp"
+                : fileName.EndsWith(".dmp", StringComparison.OrdinalIgnoreCase) ? fileName : fileName + ".dmp";
+
+            full = Path.Combine(dir, name);
+        }
+
+        var parent = Path.GetDirectoryName(full);
+        if (!string.IsNullOrEmpty(parent))
+        {
+            Directory.CreateDirectory(parent);
+        }
+
+        var result = await session
+            .ExecuteAsync($".dump /ma \"{full}\"", TimeSpan.FromMinutes(2), CancellationToken.None)
+            .ConfigureAwait(false);
+
+        var info = File.Exists(full) ? new FileInfo(full) : null;
+
+        return Json.Serialize(new
+        {
+            ok = info is not null,
+            path = full,
+            exists = info is not null,
+            sizeBytes = info?.Length,
+            text = Trim(result.Text, 1500),
+        });
+    }
+
+    [McpServerTool(Name = "crash_analyze")]
+    [Description(
+        "Run WinDbg's '!analyze -v' and return exception code, faulting module, process and failure bucket. " +
+        "Pass dumpPath to analyse a .dmp file in a throwaway debugger (the live session is untouched); " +
+        "omit it to analyse the currently stopped session, e.g. right after an access violation.")]
+    public async Task<string> CrashAnalyze(
+        [Description("Path to a .dmp file. Optional.")] string? dumpPath = null)
+    {
+        try
+        {
+            CrashReport report;
+            if (string.IsNullOrWhiteSpace(dumpPath))
+            {
+                var session = _debug.Current
+                              ?? throw new InvalidOperationException(
+                                  "No active debug session and no dumpPath given.");
+
+                report = await _analyzer.AnalyzeSessionAsync(session, CancellationToken.None).ConfigureAwait(false);
+            }
+            else
+            {
+                report = await _analyzer.AnalyzeDumpAsync(dumpPath, CancellationToken.None).ConfigureAwait(false);
+            }
+
+            return Json.Serialize(new
+            {
+                ok = true,
+                exceptionCode = report.ExceptionCode,
+                exceptionName = report.ExceptionName,
+                module = report.ModuleName,
+                image = report.ImageName,
+                process = report.ProcessName,
+                failureBucket = report.FailureBucket,
+                faultingSymbol = report.FaultingSymbol,
+                faultingSource = report.FaultingSource,
+                raw = report.Raw,
+            });
+        }
+        catch (Exception ex)
+        {
+            return Error(ex);
+        }
+    }
+
+    [McpServerTool(Name = "debug_open_dump")]
+    [Description(
+        "Open a .dmp file as the current debug session, so stack_get / locals_get / threads_get / modules_get " +
+        "work against the crash. Replaces any live session.")]
+    public async Task<string> DebugOpenDump(
+        [Description("Path to a .dmp file.")] string path)
+    {
+        try
+        {
+            var session = await _debug.OpenDumpAsync(path, CancellationToken.None).ConfigureAwait(false);
+            var last = await session.ExecuteAsync(".lastevent", TimeSpan.FromSeconds(15), CancellationToken.None)
+                .ConfigureAwait(false);
+
+            return Json.Serialize(new
+            {
+                ok = true,
+                dump = session.Target,
+                state = session.State.ToString().ToLowerInvariant(),
+                stop = Trim(last.Text, 1500),
+                hint = "Use crash_analyze (no argument) for the verdict, or stack_get / locals_get for details.",
+            });
+        }
+        catch (Exception ex)
+        {
+            return Error(ex);
+        }
     }
 
     [McpServerTool(Name = "debug_launch")]
@@ -30,12 +161,13 @@ public sealed class DebugTools
     public async Task<string> DebugLaunch(
         [Description("Absolute or workspace-relative path to the .exe.")] string executable,
         [Description("Command-line arguments for the target, as one string. Optional.")] string? arguments = null,
-        [Description("Working directory for the target. Optional.")] string? workingDirectory = null)
+        [Description("Working directory for the target. Optional.")] string? workingDirectory = null,
+        [Description("Workspace name (from workspace_list) used to resolve a relative path. Optional.")] string? workspace = null)
     {
         try
         {
             var session = await _debug.LaunchAsync(
-                ResolvePath(executable),
+                _state.ResolvePath(executable, workspace),
                 SplitArguments(arguments),
                 workingDirectory,
                 CancellationToken.None).ConfigureAwait(false);
@@ -320,17 +452,6 @@ public sealed class DebugTools
         return (true, result.Text, null, result.State.ToString().ToLowerInvariant(), result.PromptReturned);
     }
 
-    private string ResolvePath(string path)
-    {
-        if (Path.IsPathRooted(path))
-        {
-            return Path.GetFullPath(path);
-        }
-
-        var root = _state.Options.WorkspaceRoot ?? Environment.CurrentDirectory;
-        return Path.GetFullPath(Path.Combine(root, path));
-    }
-
     private static IReadOnlyList<string> SplitArguments(string? arguments)
     {
         if (string.IsNullOrWhiteSpace(arguments))
@@ -374,6 +495,16 @@ public sealed class DebugTools
 
     private static string Trim(string text, int max) =>
         text.Length <= max ? text : text[..max] + "\n... (truncated)";
+
+    private static string SafeName(string name)
+    {
+        foreach (var c in Path.GetInvalidFileNameChars())
+        {
+            name = name.Replace(c, '_');
+        }
+
+        return string.IsNullOrWhiteSpace(name) ? "target" : name;
+    }
 
     private static string Error(string? message) => Json.Serialize(new { ok = false, error = message });
 

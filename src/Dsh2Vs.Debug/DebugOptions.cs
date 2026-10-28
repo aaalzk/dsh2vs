@@ -21,6 +21,13 @@ public sealed class DebugOptions
 
     /// <summary>Optional symbol path; when null the debugger keeps its default.</summary>
     public string? SymbolPath { get; set; }
+
+    /// <summary>
+    /// Symbol server chain, e.g. "srv*C:\symbols*https://msdl.microsoft.com/download/symbols".
+    /// Left null by default on purpose: querying a symbol server during "!analyze" is exactly the
+    /// multi-minute stall people hit in Visual Studio, and the bridge must answer fast.
+    /// </summary>
+    public string? SymbolServer { get; set; }
 }
 
 public sealed class CdbLocator

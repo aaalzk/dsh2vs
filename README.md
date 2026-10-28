@@ -205,7 +205,49 @@ locals_get → int argc = 0n1 ; char ** argv = 0x0000018f`55667150 ; bool waitMo
 | `evaluate` | C++ 表达式求值 |
 | `threads_get` / `modules_get` / `memory_read` | 线程 / 模块 / 内存 |
 | `debug_stop` | 结束会话并杀掉被调试进程（不留孤儿） |
-| `debug_execute` | 逃生口：直接发任意 cdb 命令（`!analyze -v`、`.exr -1`…） |
+| `debug_execute` | 逃生口：直接发任意 cdb 命令（`.exr -1`、`k`…） |
+
+**崩溃取证（M3）**
+
+| 工具 | 作用 |
+|---|---|
+| `dump_save` | 给当前被调试进程写完整 minidump（`.dump /ma`），默认存 `%LOCALAPPDATA%\dsh2vs\dumps` |
+| `crash_analyze` | 不给参数就分析当前会话；给 `dumpPath` 就在一次性进程里分析 dump。返回异常码、异常名、故障模块、故障帧、失败桶 |
+| `debug_open_dump` | 把 .dmp 打开成当前会话，之后 `stack_get` / `locals_get` / `threads_get` 都能对着崩溃现场用 |
+
+> 崩溃分析以**异常记录**（`.exr -1` / `.ecxr`）为准，不依赖系统符号，通常 0.1–1.5 秒返回。
+> `!analyze -v` 只有在配置了 `Debug:SymbolServer` 时才会跑 —— 否则它会去联网拉系统符号，
+> 卡几分钟还给出 `WRONG_SYMBOLS` 的错误结论（这正是 VS 里常见的那个卡点）。
+
+## 多工作区（一个服务管多个仓库）
+
+服务不必只认一个目录。工作区是**配置项**，默认从
+`%LOCALAPPDATA%\dsh2vs\workspaces.json` 读（改完重启服务即可，不用重装任务）：
+
+```json
+[
+  { "name": "dsh2vs",     "path": "D:\\Projects\\dsh2vs" },
+  { "name": "zoneserver", "path": "D:\\Projects\\Tianyuan4590" }
+]
+```
+
+也可以写在 appsettings 里（`Dsh2Vs:Workspaces` 数组），或用命令行
+`--Dsh2Vs:WorkspacesFile=<路径>` 指到别处。原来的 `--Dsh2Vs:WorkspaceRoot` 仍然有效，
+会被当成名为 `default` 的工作区，向后兼容。
+
+用法：
+
+```
+workspace_list                         # 看有哪些根、当前是哪个
+workspace_use  name=zoneserver         # 切换默认工作区
+project_open   path=build\Tianyuan4590.sln workspace=zoneserver   # 单次指定
+debug_launch   executable=build\bin\Debug\ZoneServer.exe workspace=zoneserver
+```
+
+两条规则：
+
+- **相对路径**按「指定/当前工作区」解析；
+- **安全边界**放宽为「任意一个已配置工作区内」，仍然拒绝工作区外的目标（除非显式配置允许）。
 
 ## 让它常驻（推荐，尤其是远程机器）
 
@@ -290,6 +332,9 @@ dotnet run --project src\Dsh2Vs.Server -- `
 | `Dsh2Vs:Debug:IdleTimeoutMinutes` | 20 | 调试会话空闲多久自动回收 |
 | `Dsh2Vs:Debug:AllowTargetsOutsideWorkspace` | false | 是否允许调试工作区外的 exe |
 | `Dsh2Vs:Debug:CommandTimeoutSeconds` | 30 | 单条调试命令默认超时 |
+| `Dsh2Vs:Workspaces` | 空 | 额外的命名工作区数组，`[{ "name": "...", "path": "..." }]` |
+| `Dsh2Vs:WorkspacesFile` | `%LOCALAPPDATA%\dsh2vs\workspaces.json` | 工作区配置文件路径 |
+| `Dsh2Vs:Debug:SymbolServer` | 空 | 符号服务器链（如 `srv*C:\symbols*https://msdl.microsoft.com/download/symbols`）。**默认留空**：一旦配置，`!analyze -v` 才会联网拉系统符号，会明显变慢 |
 
 ## 安全边界
 
@@ -313,8 +358,8 @@ scripts/            start.ps1 / install-service.ps1 / watchdog.ps1
 
 - ✅ **M1** 项目加载、构建、结构化诊断、配置切换
 - ✅ **M2（beta）** cdb 调试：启动/附加、断点、单步、栈、变量、求值、线程、模块、内存
-- ⬜ **M3** dump 保存 + `!analyze` 崩溃取证
-- ⬜ **M4** DTE 通道：在 VS 里打开解决方案、把调试交接给你自己的 VS 窗口
+- ✅ **M3** 崩溃取证：`dump_save`、`crash_analyze`、`debug_open_dump`（以异常记录为准，秒级返回）
+- 🚧 **M4（进行中）** DTE 通道：在 VS 里打开解决方案、驱动 VS 构建、读 Error List、把调试交接给你的 VS 窗口
 
 ## 反馈
 

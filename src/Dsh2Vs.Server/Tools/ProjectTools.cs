@@ -26,9 +26,11 @@ public sealed class ProjectTools
         "This does not open Visual Studio; it only reads the project model.")]
     public string ProjectOpen(
         [Description("Absolute or workspace-relative path to a .sln or .vcxproj.")]
-        string path)
+        string path,
+        [Description("Workspace name (from workspace_list) used to resolve a relative path. Optional.")]
+        string? workspace = null)
     {
-        var full = _state.ResolvePath(path);
+        var full = _state.ResolvePath(path, workspace);
         var extension = Path.GetExtension(full);
 
         SolutionInfo info;

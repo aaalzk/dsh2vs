@@ -161,6 +161,29 @@ DSH ──HTTP/JSON-RPC──▶ Dsh2Vs.Server (127.0.0.1:8790)
 配套常驻层（`scripts/install-service.ps1` + `watchdog.ps1`）：登录自启 + 每 5 分钟探活重启，
 专门应对 Windows 更新、会话异常这类会成片杀掉进程的系统级事件。
 
+### ADR-007：崩溃分析以异常记录为准，不迷信 `!analyze`
+
+`!analyze -v` 在**没有系统符号**时会做两件坏事：花几分钟联网下载符号（看起来像卡死），
+然后给出 `WRONG_SYMBOLS` 的错误结论（我们实测到 `module=ntdll_wrong_symbols`、
+`exceptionCode=0x5FD39A05` 这种垃圾）。
+
+因此：
+
+- 实时会话：`.exr -1`（异常码/异常地址）+ `kb 12`（栈），**不依赖任何符号**，实测 109ms；
+- dump：`-c ".ecxr; .exr -1; kb 12; q"`，`.ecxr` 恢复崩溃上下文、`.exr -1` 给异常码，实测 1.2s；
+- `!analyze -v` 只在配置了 `Dsh2Vs:Debug:SymbolServer` 时才调用（用户明确愿意等符号下载）；
+- 解析层对 `*wrong*` 的模块名直接丢弃，绝不当作事实返回。
+
+### ADR-008：工作区是可配置的「集合」，不是单个根目录
+
+一个服务要同时伺候多个仓库（这里是 `dsh2vs` 自身 + `Tianyuan4590`）。做法：
+
+- 来源优先级：`workspaces.json`（`%LOCALAPPDATA%\dsh2vs`，改完重启即可）→
+  `Dsh2Vs:Workspaces` 配置数组 → 旧的单个 `Dsh2Vs:WorkspaceRoot`（记为 `default`，向后兼容）；
+- 相对路径按「调用时指定 → 当前工作区」解析；
+- 安全边界从「等于某根目录前缀」放宽为「落在任一已配置工作区内」；
+- 显式给了 `WorkspaceRoot` 时它优先成为当前工作区，因为那是运维明确表达的意图。
+
 ## 9. 里程碑
 
 | 阶段 | 范围 | 状态 |
@@ -168,5 +191,5 @@ DSH ──HTTP/JSON-RPC──▶ Dsh2Vs.Server (127.0.0.1:8790)
 | M0 | HTTP MCP 骨架、`/healthz` | ✅ |
 | M1 | 项目加载、构建、结构化诊断、配置切换 | ✅ 已实测 |
 | M2 | cdb 调试会话：启动/附加/断点/单步/栈/局部变量/求值/线程/模块/内存/停止 | ✅ 已实测（beta） |
-| M3 | dump、`!analyze` 崩溃取证 | 待办 |
-| M4 | 可选 DTE：在 VS 中打开解决方案、调试交接 | 待办 |
+| M3 | 崩溃取证：`dump_save` / `crash_analyze` / `debug_open_dump` | ✅ 已实测 |
+| M4 | 可选 DTE：在 VS 中打开解决方案、驱动 VS 构建、读 Error List、调试交接 | 🚧 进行中 |

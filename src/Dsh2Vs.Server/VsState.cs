@@ -10,14 +10,18 @@ namespace Dsh2Vs.Server;
 public sealed class VsState
 {
     private readonly Dsh2VsOptions _options;
+    private readonly WorkspaceRegistry _workspaces;
 
-    public VsState(Dsh2VsOptions options)
+    public VsState(Dsh2VsOptions options, WorkspaceRegistry workspaces)
     {
         _options = options;
+        _workspaces = workspaces;
         StartedAt = DateTimeOffset.Now;
     }
 
     public Dsh2VsOptions Options => _options;
+
+    public WorkspaceRegistry Workspaces => _workspaces;
 
     public SolutionInfo? Solution { get; set; }
 
@@ -35,7 +39,7 @@ public sealed class VsState
     public static string Version =>
         Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.1.0";
 
-    public string ResolvePath(string? path)
+    public string ResolvePath(string? path, string? workspace = null)
     {
         if (string.IsNullOrWhiteSpace(path))
         {
@@ -49,11 +53,7 @@ public sealed class VsState
             path = fallback;
         }
 
-        var full = Path.IsPathRooted(path)
-            ? path
-            : Path.GetFullPath(Path.Combine(_options.WorkspaceRoot ?? Environment.CurrentDirectory, path));
-
-        full = Path.GetFullPath(full);
+        var full = _workspaces.Resolve(workspace, path);
 
         if (!File.Exists(full))
         {
@@ -112,6 +112,9 @@ public sealed class VsState
             version = Version,
             startedAt = StartedAt,
             workspaceRoot = _options.WorkspaceRoot,
+            currentWorkspace = _workspaces.Current?.Name,
+            workspaces = _workspaces.All.Select(w => new { w.Name, w.Path }),
+            workspacesFile = _workspaces.WorkspacesFile,
             msbuild,
             msbuildError,
             solution = Solution?.FullPath,

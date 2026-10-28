@@ -70,3 +70,15 @@ Register-ScheduledTask -TaskName $watchTask -Action $watchAction -Trigger $watch
 Write-Host "registered: $serverTask (at logon), $watchTask (every 5 min)" -ForegroundColor Green
 Write-Host "workspace : $Workspace"
 Write-Host "endpoint  : http://127.0.0.1:$Port/mcp"
+
+# Seed the workspaces file so extra roots can be added later without re-registering the tasks.
+$wsFile = Join-Path $env:LOCALAPPDATA 'dsh2vs\workspaces.json'
+if (-not (Test-Path $wsFile)) {
+    New-Item -ItemType Directory -Force -Path (Split-Path $wsFile) | Out-Null
+    @(@{ name = (Split-Path $Workspace -Leaf); path = $Workspace }) |
+        ConvertTo-Json -Depth 3 | Set-Content -Path $wsFile -Encoding UTF8
+    Write-Host "seeded workspaces file: $wsFile"
+}
+else {
+    Write-Host "kept existing workspaces file: $wsFile"
+}

@@ -14,21 +14,23 @@ var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 });
 
 var options = builder.Configuration.GetSection("Dsh2Vs").Get<Dsh2VsOptions>() ?? new Dsh2VsOptions();
-options.WorkspaceRoot = Path.GetFullPath(
-    string.IsNullOrWhiteSpace(options.WorkspaceRoot)
-        ? Directory.GetCurrentDirectory()
-        : options.WorkspaceRoot);
+if (!string.IsNullOrWhiteSpace(options.WorkspaceRoot))
+{
+    options.WorkspaceRoot = Path.GetFullPath(options.WorkspaceRoot);
+}
 
 var debugOptions = builder.Configuration.GetSection("Dsh2Vs:Debug").Get<DebugOptions>() ?? new DebugOptions();
 
 builder.Services.AddSingleton(options);
 builder.Services.AddSingleton(debugOptions);
+builder.Services.AddSingleton<WorkspaceRegistry>();
 builder.Services.AddSingleton<MsBuildLocator>();
 builder.Services.AddSingleton<SolutionParser>();
 builder.Services.AddSingleton<ProjectInspector>();
 builder.Services.AddSingleton<MsBuildRunner>();
 builder.Services.AddSingleton<VsState>();
 builder.Services.AddSingleton<CdbLocator>();
+builder.Services.AddSingleton<CrashAnalyzer>();
 builder.Services.AddSingleton<DebugSessionManager>();
 
 // Stateless HTTP: every request is self-contained, so a client reconnect after a server restart
@@ -37,6 +39,7 @@ builder.Services
     .AddMcpServer()
     .WithHttpTransport(o => o.SessionMode = HttpServerSessionMode.Stateless)
     .WithTools<StatusTools>()
+    .WithTools<WorkspaceTools>()
     .WithTools<ProjectTools>()
     .WithTools<BuildTools>()
     .WithTools<DebugTools>();

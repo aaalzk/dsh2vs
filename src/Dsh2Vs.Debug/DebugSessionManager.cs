@@ -8,16 +8,18 @@ public sealed class DebugSessionManager : IAsyncDisposable
 {
     private readonly DebugOptions _debug;
     private readonly Dsh2VsOptions _options;
+    private readonly WorkspaceRegistry _workspaces;
     private readonly CdbLocator _locator;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly Timer _idleTimer;
 
     private CdbSession? _session;
 
-    public DebugSessionManager(DebugOptions debug, Dsh2VsOptions options, CdbLocator locator)
+    public DebugSessionManager(DebugOptions debug, Dsh2VsOptions options, WorkspaceRegistry workspaces, CdbLocator locator)
     {
         _debug = debug;
         _options = options;
+        _workspaces = workspaces;
         _locator = locator;
         _idleTimer = new Timer(_ => _ = ReapIdleAsync(), null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
     }
@@ -61,6 +63,37 @@ public sealed class DebugSessionManager : IAsyncDisposable
                 var cwd = Path.GetFullPath(workingDirectory);
                 await session.ExecuteAsync($".cd \"{cwd}\"", TimeSpan.FromSeconds(10), cancellationToken).ConfigureAwait(false);
             }
+
+            _session = session;
+            return session;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>Opens a dump file as the current session, so stack/locals/threads work on it.</summary>
+    public async Task<CdbSession> OpenDumpAsync(string dumpPath, CancellationToken cancellationToken)
+    {
+        var full = Path.GetFullPath(dumpPath);
+        if (!File.Exists(full))
+        {
+            throw new FileNotFoundException($"Dump not found: {full}");
+        }
+
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await StopInternalAsync().ConfigureAwait(false);
+
+            var session = await CdbSession.StartAsync(
+                _locator.Resolve(),
+                ["-z", full],
+                full,
+                _debug.CommandTimeoutSeconds,
+                _debug.SymbolPath,
+                cancellationToken).ConfigureAwait(false);
 
             _session = session;
             return session;
@@ -169,24 +202,15 @@ public sealed class DebugSessionManager : IAsyncDisposable
             return;
         }
 
-        var root = _options.WorkspaceRoot;
-        if (string.IsNullOrWhiteSpace(root))
+        if (_workspaces.Contains(path))
         {
             return;
         }
 
-        var normalizedRoot = Path.GetFullPath(root);
-        if (!normalizedRoot.EndsWith(Path.DirectorySeparatorChar))
-        {
-            normalizedRoot += Path.DirectorySeparatorChar;
-        }
-
-        if (!Path.GetFullPath(path).StartsWith(normalizedRoot, StringComparison.OrdinalIgnoreCase))
-        {
-            throw new InvalidOperationException(
-                $"Refusing to {action} '{path}': it is outside the workspace ({normalizedRoot}). " +
-                "Set Dsh2Vs:Debug:AllowTargetsOutsideWorkspace=true to allow it.");
-        }
+        var known = string.Join(", ", _workspaces.All.Select(w => $"{w.Name}={w.Path}"));
+        throw new InvalidOperationException(
+            $"Refusing to {action} '{path}': it is outside every configured workspace ({known}). " +
+            "Add it to the workspaces file, or set Dsh2Vs:Debug:AllowTargetsOutsideWorkspace=true.");
     }
 
     private static string? ProcessImagePath(int pid)

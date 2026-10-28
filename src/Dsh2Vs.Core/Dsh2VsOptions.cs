@@ -28,6 +28,19 @@ public sealed class Dsh2VsOptions
     /// <summary>Base directory for relative paths passed to tools.</summary>
     public string? WorkspaceRoot { get; set; }
 
+    /// <summary>
+    /// Additional named roots. Tools resolve relative paths against one of these, and the safety
+    /// guard accepts targets anywhere inside any of them.
+    /// </summary>
+    public List<WorkspaceEntry> Workspaces { get; set; } = [];
+
+    /// <summary>
+    /// JSON file with [{ "name": "...", "path": "..." }] entries. Defaults to
+    /// %LOCALAPPDATA%\dsh2vs\workspaces.json so it can be edited without touching the repo
+    /// or re-registering the service.
+    /// </summary>
+    public string? WorkspacesFile { get; set; }
+
     public string ResolveLogDirectory() =>
         LogDirectory ?? Path.Combine(Path.GetTempPath(), "dsh2vs", "logs");
 }
