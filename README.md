@@ -1,5 +1,9 @@
 # dsh2vs
 
+<!-- 收录到 dsh-plugin.org 之后放开下面这行（详情页地址见 docs/marketplace-submission.md）
+[![Listed on dsh-plugin.org](https://dsh-plugin.org/badges/listed.svg)](https://dsh-plugin.org/plugins/aaalzk/dsh2vs)
+-->
+
 **让你的 AI 助手（DSH 或任何 MCP 客户端）能真正"动手"操作 Visual Studio 的 C++ 工程：加载项目、编译、断点调试。**
 
 不装 VS 插件，不需要 Visual Studio 开着，不会弹出「项目已过期，是否重新生成」这种没人点的对话框。
