@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using System.Text.RegularExpressions;
 using Dsh2Vs.Core;
 
@@ -34,7 +34,7 @@ public sealed class CrashAnalyzer
         _locator = locator;
     }
 
-    public async Task<CrashReport> AnalyzeSessionAsync(CdbSession session, CancellationToken cancellationToken)
+    public async Task<CrashReport> AnalyzeSessionAsync(IDebugSession session, CancellationToken cancellationToken)
     {
         var record = await session.ExecuteAsync(".exr -1", TimeSpan.FromSeconds(20), cancellationToken)
             .ConfigureAwait(false);
@@ -304,3 +304,4 @@ public sealed class CrashAnalyzer
     private static string Truncate(string text) =>
         text.Length <= 12000 ? text : text[..12000] + "\n... (truncated)";
 }
+

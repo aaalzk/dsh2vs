@@ -13,3 +13,11 @@ target_link_libraries(hello PRIVATE math_util)
 # Debugging fixture: long enough to attach to, with a loop worth breaking into.
 add_executable(loopy src/loopy.cpp)
 target_link_libraries(loopy PRIVATE math_util)
+
+# Startup-failure fixture: needs_dll.exe cannot start unless payload.dll sits next to it.
+# Copy the exe alone somewhere else to reproduce STATUS_DLL_NOT_FOUND (0xC0000135).
+add_library(payload SHARED src/payload.cpp)
+# Without exported symbols MSVC produces no import library, and the exe cannot link.
+set_target_properties(payload PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS TRUE)
+add_executable(needs_dll src/needs_dll.cpp)
+target_link_libraries(needs_dll PRIVATE payload)

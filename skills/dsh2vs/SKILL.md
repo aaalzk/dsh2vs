@@ -69,6 +69,35 @@ debug_break
 它会先用 `.break`，无效就用 `DebugBreakProcess` 从外部注入断点，然后 dump **所有线程**的栈。
 输出里能直接看到 `USER32!MessageBoxWorker → USER32!MessageBoxA → 你的函数`，定位后 `debug_stop` 收工。
 
+## 3.5 程序一启动就退出 / 没有输出（缺 DLL）
+
+**判据**：`debug_launch` 返回 `ok:false` + `exitCodeHex: "0xC0000135"`，`diagnosis` 写明
+`STATUS_DLL_NOT_FOUND`，`imports.missing` 直接列出缺哪个。
+
+```
+debug_preflight executable=build\bin\Debug\ZoneServer.exe
+```
+
+毫秒级、不用起调试器：读 PE 导入表，逐个在 exe 目录 / System32 / PATH 里解析。
+
+处理：
+
+1. 看 `missing` 清单，把对应 DLL 从 vcpkg 的 `installed\x64-windows\bin`（Debug 配置是
+   `installed\x64-windows\debug\bin`）拷到 exe 同目录。
+2. **Debug 版依赖带 `d` 后缀**（`spdlogd.dll` 而不是 `spdlog.dll`）—— 移错文件会得到假的「正常」结果。
+3. 拷完再跑一次 `debug_preflight`，`missingCount: 0` 再启动。
+
+其它启动失败的退出码：
+
+| 退出码 | 含义 |
+|---|---|
+| `0xC0000135` | 缺依赖 DLL（`STATUS_DLL_NOT_FOUND`） |
+| `0xC0000142` | 依赖 DLL 初始化失败 |
+| `0xC0000409` | /GS、`abort()` 或 `__fastfail` |
+| `0x0` | 正常跑完退出 |
+
+> 注意：目标若在**程序自己的** MessageA/assert 里卡住，那不是启动失败 —— 用 `debug_break`（见上）。
+
 ## 4. 崩溃取证
 
 想在**第一时间**停在崩溃点（而不是等 Windows 错误报告）：

@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>Dsh2Vs.Debug</RootNamespace>
@@ -15,5 +16,10 @@
     <ProjectReference Include="..\Dsh2Vs.Core\Dsh2Vs.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="ClrDebug" Version="0.4.2" />
+  </ItemGroup>
+
 </Project>
+
 

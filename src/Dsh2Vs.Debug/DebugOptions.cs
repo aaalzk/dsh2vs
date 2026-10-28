@@ -19,6 +19,12 @@ public sealed class DebugOptions
     /// <summary>Default timeout for a command that is expected to return a prompt (g / step).</summary>
     public int CommandTimeoutSeconds { get; set; } = 30;
 
+    /// <summary>
+    /// Which debugger backend to use: "cdb" (default, child process, fault-isolated) or "dbgeng"
+    /// (in-process engine: no process hop and no prompt parsing, but an engine crash takes the bridge down).
+    /// </summary>
+    public string Engine { get; set; } = "cdb";
+
     /// <summary>Optional symbol path; when null the debugger keeps its default.</summary>
     public string? SymbolPath { get; set; }
 

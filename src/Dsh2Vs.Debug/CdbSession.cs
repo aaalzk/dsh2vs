@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -19,7 +19,7 @@ public sealed record CdbResult(string Text, bool PromptReturned, DebuggerState S
 /// cdb writes its prompt ("0:000>") without a trailing newline, so a line-based reader would block;
 /// the pump appends raw characters and we synchronise on the last prompt position instead.
 /// </summary>
-public sealed class CdbSession : IAsyncDisposable
+public sealed class CdbSession : IDebugSession
 {
     private static readonly Regex PromptPattern = new(@"\d+:\d+>", RegexOptions.Compiled);
 
@@ -50,6 +50,41 @@ public sealed class CdbSession : IAsyncDisposable
     public DebuggerState State { get; private set; } = DebuggerState.Running;
 
     public bool HasExited => _process.HasExited;
+
+    /// <summary>Exit code of cdb itself, which mirrors the debuggee's when it fails to start.</summary>
+    public int? ExitCode { get; private set; }
+
+    private void CaptureExitCode()
+    {
+        if (ExitCode is not null || !_process.HasExited)
+        {
+            return;
+        }
+
+        try
+        {
+            ExitCode = _process.ExitCode;
+        }
+        catch
+        {
+            // exit code unavailable
+        }
+    }
+
+    /// <summary>Last chunk of whatever the debugger printed, so a failed start is not a bare placeholder.</summary>
+    private string LastOutputTail(int maxChars = 2000)
+    {
+        lock (_gate)
+        {
+            if (_buffer.Length == 0)
+            {
+                return string.Empty;
+            }
+
+            var start = Math.Max(0, _buffer.Length - maxChars);
+            return _buffer.ToString(start, _buffer.Length - start);
+        }
+    }
 
     public static async Task<CdbSession> StartAsync(
         string cdbPath,
@@ -179,7 +214,12 @@ public sealed class CdbSession : IAsyncDisposable
     {
         if (HasExited)
         {
-            return new CdbResult("<debugger exited>", true, DebuggerState.Exited);
+            CaptureExitCode();
+            var tail = LastOutputTail();
+            return new CdbResult(
+                string.IsNullOrWhiteSpace(tail) ? "<debugger exited>" : tail,
+                true,
+                DebuggerState.Exited);
         }
 
         await _io.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -294,6 +334,7 @@ public sealed class CdbSession : IAsyncDisposable
         finally
         {
             State = DebuggerState.Exited;
+            CaptureExitCode();
         }
     }
 
@@ -405,3 +446,4 @@ public sealed class CdbSession : IAsyncDisposable
         _process.Dispose();
     }
 }
+

@@ -196,7 +196,8 @@ locals_get → int argc = 0n1 ; char ** argv = 0x0000018f`55667150 ; bool waitMo
 
 | 工具 | 作用 |
 |---|---|
-| `debug_launch` / `debug_attach` | 启动 exe（停在初始断点）或附加到 PID |
+| `debug_launch` / `debug_attach` | 启动 exe（停在初始断点）或附加到 PID。**启动失败会返回 `ok:false` + 退出码 + 缺失依赖清单**，不再是「它退出了」 |
+| `debug_preflight` | 启动前检查依赖：读 PE 导入表，逐个在 exe 目录 / System32 / PATH 里解析，直接列缺失的 DLL（毫秒级，不起调试器） |
 | `debug_continue` / `debug_step` | 继续 / 单步（into·over·out） |
 | `debug_break` | 打断。目标卡在模态框里时 `.break` 不起作用，会自动改用 `DebugBreakProcess` 注入，并 dump 所有线程栈（能直接看到 `USER32!MessageBoxW` 那一帧） |
 | `breakpoint_set` / `list` / `remove` | 断点，支持条件表达式；符号没加载时自动降级为 `bu` |
@@ -326,7 +327,19 @@ Windows SDK 里没装 Debugging Tools。装的时候勾「Debugging Tools for Wi
 调用 `debug_break`：它会注入断点并 dump 所有线程栈，你能直接看到 `USER32!MessageBoxW → 你的函数`，
 定位后 `debug_stop` 结束进程即可。
 
-**11. GitHub 上不去**
+**11. 程序一启动就退出，控制台什么输出都没有**
+八成是缺依赖 DLL（`STATUS_DLL_NOT_FOUND` / `0xC0000135`）。现在的返回会直接告诉你：
+
+```json
+{"ok": false, "state": "exited", "exitCode": -1073741515, "exitCodeHex": "0xC0000135",
+ "diagnosis": "STATUS_DLL_NOT_FOUND: a dependency DLL is missing, the program never started",
+ "imports": { "missingCount": 1, "missing": ["spdlogd.dll"] }}
+```
+
+想提前查（不必起调试器）：`debug_preflight executable=build\bin\Debug\ZoneServer.exe`。
+注意 **Debug 版依赖带 `d` 后缀**（`spdlogd.dll`，不是 `spdlog.dll`）—— 移错文件会得到假的「正常」结果。
+
+**12. GitHub 上不去**
 用镜像：`git clone https://gh.223456.xyz/github.com/aaalzk/dsh2vs.git`。
 
 ## 已知限制

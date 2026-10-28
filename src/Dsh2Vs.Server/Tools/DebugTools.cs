@@ -1,5 +1,6 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Text;
+using Dsh2Vs.Core;
 using System.Text.Json;
 using Dsh2Vs.Debug;
 using ModelContextProtocol.Server;
@@ -179,6 +180,40 @@ public sealed class DebugTools
     [Description("List the current first-chance / second-chance exception settings ('sx').")]
     public Task<string> ExceptionList() => Run("sx", 20000, "exception_list");
 
+    [McpServerTool(Name = "debug_preflight")]
+    [Description(
+        "Check an executable's imports before running it: reads the PE import table and resolves every DLL " +
+        "(image directory first, then the normal search path). Returns the missing ones. " +
+        "This is the fast way to explain 'the program exits immediately with no output' - " +
+        "STATUS_DLL_NOT_FOUND (0xC0000135) means a dependency was never found but nothing printed.")]
+    public string DebugPreflight(
+        [Description("Absolute or workspace-relative path to the .exe.")] string executable,
+        [Description("Workspace name used to resolve a relative path. Optional.")] string? workspace = null)
+    {
+        try
+        {
+            var full = _state.ResolvePath(executable, workspace);
+            var (resolved, missing) = DependencyResolver.Check(full);
+
+            return Json.Serialize(new
+            {
+                ok = missing.Count == 0,
+                executable = full,
+                importedCount = resolved.Count + missing.Count,
+                missingCount = missing.Count,
+                missing,
+                diagnosis = missing.Count == 0
+                    ? "all imports resolve"
+                    : $"missing dependency DLL(s): {string.Join(", ", missing)} - copy them next to the exe "
+                      + "or add their directory to PATH; the program cannot start until then",
+            });
+        }
+        catch (Exception ex)
+        {
+            return Error(ex);
+        }
+    }
+
     [McpServerTool(Name = "debug_launch")]
     [Description(
         "Start a C++ executable under the cdb debugger and stop at the initial breakpoint, so breakpoints can be set " +
@@ -192,8 +227,10 @@ public sealed class DebugTools
     {
         try
         {
+            var target = _state.ResolvePath(executable, workspace);
+
             var session = await _debug.LaunchAsync(
-                _state.ResolvePath(executable, workspace),
+                target,
                 SplitArguments(arguments),
                 workingDirectory,
                 CancellationToken.None).ConfigureAwait(false);
@@ -201,10 +238,32 @@ public sealed class DebugTools
             var stop = await session.ExecuteAsync(".lastevent", TimeSpan.FromSeconds(10), CancellationToken.None)
                 .ConfigureAwait(false);
 
+            // A program that fails to start (missing DLL) dies before any of our commands reach it.
+            // Report that as a failure with the reason, never as "ok + exited".
+            if (session.HasExited)
+            {
+                var code = session.ExitCode;
+                return Json.Serialize(new
+                {
+                    ok = false,
+                    target,
+                    state = "exited",
+                    exitCode = code,
+                    exitCodeHex = code is int c ? $"0x{c:X8}" : null,
+                    diagnosis = DescribeExit(code),
+                    imports = Preflight(target),
+                    output = Trim(stop.Text, 2000),
+                    hint = code == unchecked((int)0xC0000135)
+                        ? "A dependency DLL is missing. Use debug_preflight to list the exact names, then copy them "
+                          + "next to the exe (or add their folder to PATH)."
+                        : "The program exited before reaching the initial breakpoint; output above is what the debugger saw.",
+                });
+            }
+
             return Json.Serialize(new
             {
                 ok = true,
-                target = session.Target,
+                target,
                 state = session.State.ToString().ToLowerInvariant(),
                 stop = Trim(stop.Text, 1200),
                 hint = "Set breakpoints with breakpoint_set, then call debug_continue.",
@@ -445,12 +504,19 @@ public sealed class DebugTools
             return Error(error);
         }
 
+        var session = _debug.Current;
+        var exited = session?.HasExited == true || state == "exited";
+        var code = session?.ExitCode;
+
         return Json.Serialize(new
         {
             ok = true,
             action,
             state,
             promptReturned,
+            exitCode = exited ? code : null,
+            exitCodeHex = exited && code is int c ? $"0x{c:X8}" : null,
+            diagnosis = exited ? DescribeExit(code) : null,
             text = Trim(text, MaxText),
         });
     }
@@ -522,6 +588,37 @@ public sealed class DebugTools
     private static string Trim(string text, int max) =>
         text.Length <= max ? text : text[..max] + "\n... (truncated)";
 
+    /// <summary>Turns a debuggee exit code into something actionable instead of "it exited".</summary>
+    private static string? DescribeExit(int? code) => code switch
+    {
+        null => null,
+        0 => "the program ran and exited normally",
+        unchecked((int)0xC0000135) => "STATUS_DLL_NOT_FOUND: a dependency DLL is missing, the program never started",
+        unchecked((int)0xC0000142) => "STATUS_DLL_INIT_FAILED: a dependency DLL failed to initialize",
+        unchecked((int)0xC0000409) => "STATUS_STACK_BUFFER_OVERRUN: /GS, abort() or __fastfail",
+        unchecked((int)0xC0000005) => "STATUS_ACCESS_VIOLATION",
+        _ => null,
+    };
+
+    /// <summary>Missing-import report, used to explain a 0xC0000135 start failure on the spot.</summary>
+    private static object? Preflight(string executable)
+    {
+        try
+        {
+            var (resolved, missing) = DependencyResolver.Check(executable);
+            return new
+            {
+                importedCount = resolved.Count + missing.Count,
+                missingCount = missing.Count,
+                missing,
+            };
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     private static string SafeName(string name)
     {
         foreach (var c in Path.GetInvalidFileNameChars())
@@ -536,3 +633,4 @@ public sealed class DebugTools
 
     private static string Error(Exception ex) => Error(ex.Message);
 }
+

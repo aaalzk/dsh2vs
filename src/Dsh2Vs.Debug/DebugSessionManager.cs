@@ -13,7 +13,7 @@ public sealed class DebugSessionManager : IAsyncDisposable
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly Timer _idleTimer;
 
-    private CdbSession? _session;
+    private IDebugSession? _session;
 
     public DebugSessionManager(DebugOptions debug, Dsh2VsOptions options, WorkspaceRegistry workspaces, CdbLocator locator)
     {
@@ -24,11 +24,13 @@ public sealed class DebugSessionManager : IAsyncDisposable
         _idleTimer = new Timer(_ => _ = ReapIdleAsync(), null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
     }
 
-    public CdbSession? Current => _session;
+    public IDebugSession? Current => _session;
+
+    private bool UseDbgEng => string.Equals(_debug.Engine, "dbgeng", StringComparison.OrdinalIgnoreCase);
 
     public string CdbPath => _locator.Resolve();
 
-    public async Task<CdbSession> LaunchAsync(
+    public async Task<IDebugSession> LaunchAsync(
         string executable,
         IReadOnlyList<string> targetArguments,
         string? workingDirectory,
@@ -47,21 +49,31 @@ public sealed class DebugSessionManager : IAsyncDisposable
         {
             await StopInternalAsync().ConfigureAwait(false);
 
-            var cdbArgs = new List<string> { "-o", "-G", full };
-            cdbArgs.AddRange(targetArguments);
-
-            var session = await CdbSession.StartAsync(
-                _locator.Resolve(),
-                cdbArgs,
-                full,
-                _debug.CommandTimeoutSeconds,
-                _debug.SymbolPath,
-                cancellationToken).ConfigureAwait(false);
-
-            if (!string.IsNullOrWhiteSpace(workingDirectory))
+            IDebugSession session;
+            if (UseDbgEng)
             {
-                var cwd = Path.GetFullPath(workingDirectory);
-                await session.ExecuteAsync($".cd \"{cwd}\"", TimeSpan.FromSeconds(10), cancellationToken).ConfigureAwait(false);
+                session = await DbgEngSession
+                    .StartProcessAsync(full, targetArguments, workingDirectory, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            else
+            {
+                var cdbArgs = new List<string> { "-o", "-G", full };
+                cdbArgs.AddRange(targetArguments);
+
+                session = await CdbSession.StartAsync(
+                    _locator.Resolve(),
+                    cdbArgs,
+                    full,
+                    _debug.CommandTimeoutSeconds,
+                    _debug.SymbolPath,
+                    cancellationToken).ConfigureAwait(false);
+
+                if (!string.IsNullOrWhiteSpace(workingDirectory))
+                {
+                    var cwd = Path.GetFullPath(workingDirectory);
+                    await session.ExecuteAsync($".cd \"{cwd}\"", TimeSpan.FromSeconds(10), cancellationToken).ConfigureAwait(false);
+                }
             }
 
             _session = session;
@@ -74,7 +86,7 @@ public sealed class DebugSessionManager : IAsyncDisposable
     }
 
     /// <summary>Opens a dump file as the current session, so stack/locals/threads work on it.</summary>
-    public async Task<CdbSession> OpenDumpAsync(string dumpPath, CancellationToken cancellationToken)
+    public async Task<IDebugSession> OpenDumpAsync(string dumpPath, CancellationToken cancellationToken)
     {
         var full = Path.GetFullPath(dumpPath);
         if (!File.Exists(full))
@@ -87,13 +99,15 @@ public sealed class DebugSessionManager : IAsyncDisposable
         {
             await StopInternalAsync().ConfigureAwait(false);
 
-            var session = await CdbSession.StartAsync(
-                _locator.Resolve(),
-                ["-z", full],
-                full,
-                _debug.CommandTimeoutSeconds,
-                _debug.SymbolPath,
-                cancellationToken).ConfigureAwait(false);
+            IDebugSession session = UseDbgEng
+                ? await DbgEngSession.OpenDumpAsync(full, cancellationToken).ConfigureAwait(false)
+                : await CdbSession.StartAsync(
+                    _locator.Resolve(),
+                    ["-z", full],
+                    full,
+                    _debug.CommandTimeoutSeconds,
+                    _debug.SymbolPath,
+                    cancellationToken).ConfigureAwait(false);
 
             _session = session;
             return session;
@@ -104,7 +118,7 @@ public sealed class DebugSessionManager : IAsyncDisposable
         }
     }
 
-    public async Task<CdbSession> AttachAsync(int pid, CancellationToken cancellationToken)
+    public async Task<IDebugSession> AttachAsync(int pid, CancellationToken cancellationToken)
     {
         var image = ProcessImagePath(pid);
         if (image is null)
@@ -120,13 +134,15 @@ public sealed class DebugSessionManager : IAsyncDisposable
         {
             await StopInternalAsync().ConfigureAwait(false);
 
-            var session = await CdbSession.StartAsync(
-                _locator.Resolve(),
-                ["-o", "-G", "-p", pid.ToString()],
-                image,
-                _debug.CommandTimeoutSeconds,
-                _debug.SymbolPath,
-                cancellationToken).ConfigureAwait(false);
+            IDebugSession session = UseDbgEng
+                ? await DbgEngSession.AttachAsync(pid, image, cancellationToken).ConfigureAwait(false)
+                : await CdbSession.StartAsync(
+                    _locator.Resolve(),
+                    ["-o", "-G", "-p", pid.ToString()],
+                    image,
+                    _debug.CommandTimeoutSeconds,
+                    _debug.SymbolPath,
+                    cancellationToken).ConfigureAwait(false);
 
             _session = session;
             return session;
@@ -348,3 +364,4 @@ public static partial class CdbParsers
 
     private static readonly Regex PromptOnly = new(@"^\d+:\d+>$", RegexOptions.Compiled);
 }
+
