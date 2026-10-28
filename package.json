@@ -1,10 +1,9 @@
 {
   "name": "dsh2vs",
   "version": "0.1.0",
-  "private": true,
-  "type": "module",
-  "description": "Drive a Visual Studio C++ workstation from DSH: load solutions, build with MSBuild, debug with cdb, and analyse crashes.",
+  "description": "DSH plugin: connect the dsh2vs bridge to build and debug Visual Studio C++ projects (MSBuild + cdb) without a VSIX or a running Visual Studio.",
   "license": "MIT",
+  "type": "module",
   "exports": {
     ".": "./index.js",
     "./locale/*.json": "./locale/*.json",
@@ -21,17 +20,30 @@
       "patch": "./cordis.patch.yml"
     }
   },
+  "mcpName": "io.github.aaalzk/dsh2vs",
   "keywords": [
     "dsh-plugin",
+    "deepseek-harness",
+    "mcp",
     "visual-studio",
     "cpp",
     "msbuild",
     "cdb",
-    "debugger",
-    "mcp"
+    "debugger"
   ],
+  "homepage": "https://github.com/aaalzk/dsh2vs#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/aaalzk/dsh2vs.git"
+    "url": "git+https://github.com/aaalzk/dsh2vs.git"
+  },
+  "bugs": {
+    "url": "https://github.com/aaalzk/dsh2vs/issues"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
   }
 }

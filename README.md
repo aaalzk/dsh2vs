@@ -14,7 +14,11 @@
 ## 作为 DSH 插件安装（一条命令）
 
 ```powershell
+# 现在就能用（源码安装）
 dsh plugin --profile web add github:aaalzk/dsh2vs
+
+# npm 包发布后更短（届时这条才会生效）
+dsh plugin --profile web add dsh2vs
 ```
 
 装完重启会话，`mcp__vs__*` 那 40+ 个工具就直接可用（插件会把 MCP 连接自动接到
