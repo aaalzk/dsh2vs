@@ -13,7 +13,7 @@
 | README 含安装命令 | `dsh plugin --profile web add github:aaalzk/dsh2vs` |
 | 导出 `apply(ctx)` | `index.js`（配置型 bundle，`apply` 为空实现，业务在 .NET 桥进程） |
 | 根目录 `package.json` | 已添加，声明 `dsh.bundle.patch` |
-| 能力分类（11 类选一） | 开发与运维 |
+| 能力分类（11 类选一） | 集成与连接 |
 | 许可证 | MIT |
 | 信任信号 | README 的「作为 DSH 插件安装」表格 + 真实 JSON 输出 + 权限/外部服务说明 |
 
@@ -28,7 +28,7 @@ https://github.com/aaalzk/dsh2vs
 Visual Studio 开着、不会被「项目已过期，是否重新生成」这类模态框卡死。
 
 ### 能力分类
-开发与运维
+集成与连接
 
 ### 安装命令
 ```
@@ -55,3 +55,4 @@ dsh plugin --profile web add github:aaalzk/dsh2vs
 - [ ] 发布 NPM 包后，安装命令可简化为 `dsh plugin --profile web add dsh2vs`，
       才会出现在 DSH 内的「插件中心」
 - [ ] 补一张真实截图或 GIF（Plugin Manager 里的插件条目 + 一次 build→debug 会话）
+

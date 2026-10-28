@@ -1,4 +1,4 @@
-# dsh2vs
+﻿# dsh2vs
 
 <!-- 收录到 dsh-plugin.org 之后放开下面这行（详情页地址见 docs/marketplace-submission.md）
 [![Listed on dsh-plugin.org](https://dsh-plugin.org/badges/listed.svg)](https://dsh-plugin.org/plugins/aaalzk/dsh2vs)
@@ -22,7 +22,7 @@ dsh plugin --profile web add github:aaalzk/dsh2vs
 
 | 项目 | 内容 |
 |---|---|
-| 能力分类 | 开发与运维 |
+| 能力分类 | 集成与连接（它本质是一座桥：把 DSH 接到一台 Visual Studio 工作站） |
 | 一句话价值 | 让 DSH 直接加载、编译、断点调试 VS 的 C++ 工程，不需要装 VSIX、不用 VS 开着、不会被弹窗卡住 |
 | 插件形态 | 配置型 bundle：`cordis.patch.yml` 注入 `@deepseek-ai/dsh-mcp-client`，业务在独立的 .NET 桥进程里 |
 | 兼容与运行要求 | DSH（任意近期版本）+ **Windows**；需要 .NET 9 SDK、VS 2022 C++ 工具链（MSBuild）、Windows SDK 的 Debugging Tools（cdb.exe） |
@@ -463,4 +463,5 @@ git clone https://gh.223456.xyz/github.com/<任意仓库>.git
 ## 许可证
 
 MIT © 2026 aaalzk
+
 
