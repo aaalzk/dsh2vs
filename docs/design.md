@@ -184,6 +184,22 @@ DSH ──HTTP/JSON-RPC──▶ Dsh2Vs.Server (127.0.0.1:8790)
 - 安全边界从「等于某根目录前缀」放宽为「落在任一已配置工作区内」；
 - 显式给了 `WorkspaceRoot` 时它优先成为当前工作区，因为那是运维明确表达的意图。
 
+### ADR-009：DTE 通道放在进程外（PowerShell 5.1），不做 COM interop
+
+`Marshal.GetActiveObject` 在 .NET Core / .NET 5+ 里已被移除，而 DTE 是 COM。在 .NET 9 里复刻
+ROT 查询 + IDispatch 调用是可以做的，但代价高、易碎、且难以人工复现。
+
+因此 M4 选择：**bridge 里只做进程调度，真正的 DTE 调用放在 `scripts/vs-dte.ps1`**（Windows
+PowerShell 5.1，天然支持 `GetActiveObject`），脚本输出一行 JSON，bridge 解析后返回。
+
+好处：
+- 出问题时你可以直接在命令行跑同一个脚本，看到和 bridge 完全一样的结果；
+- 不引入 COM interop 依赖，服务端保持纯托管；
+- 脚本随服务一起部署（`CopyToOutputDirectory`），不会出现"找不到脚本"的部署坑。
+
+边界：这一层**只在你愿意被改变 VS 状态时使用**（`vs_dte_open` / `vs_dte_build`）；
+无人值守的日常构建仍走 `build`（MSBuild 子进程），互不依赖。
+
 ## 9. 里程碑
 
 | 阶段 | 范围 | 状态 |
@@ -192,4 +208,4 @@ DSH ──HTTP/JSON-RPC──▶ Dsh2Vs.Server (127.0.0.1:8790)
 | M1 | 项目加载、构建、结构化诊断、配置切换 | ✅ 已实测 |
 | M2 | cdb 调试会话：启动/附加/断点/单步/栈/局部变量/求值/线程/模块/内存/停止 | ✅ 已实测（beta） |
 | M3 | 崩溃取证：`dump_save` / `crash_analyze` / `debug_open_dump` | ✅ 已实测 |
-| M4 | 可选 DTE：在 VS 中打开解决方案、驱动 VS 构建、读 Error List、调试交接 | 🚧 进行中 |
+| M4 | VS 联动（DTE）：状态 / 打开解决方案 / 构建 / 错误列表 / 调试交接 | ✅ 已实测（beta） |

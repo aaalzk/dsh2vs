@@ -1,8 +1,9 @@
-using Dsh2Vs.Build;
+﻿using Dsh2Vs.Build;
 using Dsh2Vs.Core;
 using Dsh2Vs.Debug;
 using Dsh2Vs.Server;
 using Dsh2Vs.Server.Tools;
+using Dsh2Vs.Server.VsDte;
 using ModelContextProtocol.AspNetCore;
 
 // Content root is the assembly directory, so appsettings.json is found no matter which
@@ -32,6 +33,7 @@ builder.Services.AddSingleton<VsState>();
 builder.Services.AddSingleton<CdbLocator>();
 builder.Services.AddSingleton<CrashAnalyzer>();
 builder.Services.AddSingleton<DebugSessionManager>();
+builder.Services.AddSingleton<VsDteClient>();
 
 // Stateless HTTP: every request is self-contained, so a client reconnect after a server restart
 // (or after the user clicks something) never hits a stale Mcp-Session-Id.
@@ -42,7 +44,8 @@ builder.Services
     .WithTools<WorkspaceTools>()
     .WithTools<ProjectTools>()
     .WithTools<BuildTools>()
-    .WithTools<DebugTools>();
+    .WithTools<DebugTools>()
+    .WithTools<VsDteTools>();
 
 var app = builder.Build();
 
@@ -50,3 +53,5 @@ app.MapGet("/healthz", (VsState state) => Results.Json(state.Health()));
 app.MapMcp("/mcp");
 
 app.Run();
+
+

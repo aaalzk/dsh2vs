@@ -219,6 +219,19 @@ locals_get → int argc = 0n1 ; char ** argv = 0x0000018f`55667150 ; bool waitMo
 > `!analyze -v` 只有在配置了 `Debug:SymbolServer` 时才会跑 —— 否则它会去联网拉系统符号，
 > 卡几分钟还给出 `WRONG_SYMBOLS` 的错误结论（这正是 VS 里常见的那个卡点）。
 
+**VS 联动（M4，需要你的 Visual Studio 正在运行）**
+
+| 工具 | 作用 |
+|---|---|
+| `vs_dte_status` | 读 VS 当前状态：打开的解决方案、工程数、构建状态、调试器模式 |
+| `vs_dte_open` | 在**你的 VS 窗口里**打开某个解决方案（你想看/想改时用） |
+| `vs_dte_build` | 用 VS 自己构建当前解决方案，返回 VS 的构建结果 |
+| `vs_dte_errors` | 读 VS 的「错误列表」，结构化返回 |
+| `vs_dte_attach` | 把进程交给 VS 调试器，方便你旁观。**桥正用 cdb 调试该进程时会拒绝**（一个进程不能被两个调试器挂） |
+
+> 这一层走 DTE（COM），通过 Windows PowerShell 5.1 调 —— 不改你的 VS 状态就没有副作用；
+> 但 `vs_dte_open` / `vs_dte_build` 确实会改变 VS 里打开的东西，无人值守时优先用普通的 `build` 工具。
+
 ## 多工作区（一个服务管多个仓库）
 
 服务不必只认一个目录。工作区是**配置项**，默认从
@@ -359,7 +372,7 @@ scripts/            start.ps1 / install-service.ps1 / watchdog.ps1
 - ✅ **M1** 项目加载、构建、结构化诊断、配置切换
 - ✅ **M2（beta）** cdb 调试：启动/附加、断点、单步、栈、变量、求值、线程、模块、内存
 - ✅ **M3** 崩溃取证：`dump_save`、`crash_analyze`、`debug_open_dump`（以异常记录为准，秒级返回）
-- 🚧 **M4（进行中）** DTE 通道：在 VS 里打开解决方案、驱动 VS 构建、读 Error List、把调试交接给你的 VS 窗口
+- ✅ **M4（beta）** VS 联动：`vs_dte_*` —— 读 VS 状态、在 VS 里开解决方案、驱动 VS 构建、读错误列表、调试交接
 
 ## 反馈
 
