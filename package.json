@@ -1,0 +1,37 @@
+{
+  "name": "dsh2vs",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Drive a Visual Studio C++ workstation from DSH: load solutions, build with MSBuild, debug with cdb, and analyse crashes.",
+  "license": "MIT",
+  "exports": {
+    ".": "./index.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "keywords": [
+    "dsh-plugin",
+    "visual-studio",
+    "cpp",
+    "msbuild",
+    "cdb",
+    "debugger",
+    "mcp"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aaalzk/dsh2vs.git"
+  }
+}

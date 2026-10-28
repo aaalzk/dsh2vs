@@ -1,4 +1,4 @@
-﻿# dsh2vs
+# dsh2vs
 
 **让你的 AI 助手（DSH 或任何 MCP 客户端）能真正"动手"操作 Visual Studio 的 C++ 工程：加载项目、编译、断点调试。**
 
@@ -6,6 +6,27 @@
 
 > An out-of-process MCP bridge that lets an AI agent load, build and debug Visual Studio C++ projects
 > without a VSIX, without Visual Studio running, and without modal dialogs blocking automation.
+
+## 作为 DSH 插件安装（一条命令）
+
+```powershell
+dsh plugin --profile web add github:aaalzk/dsh2vs
+```
+
+装完重启会话，`mcp__vs__*` 那 40+ 个工具就直接可用（插件会把 MCP 连接自动接到
+`http://127.0.0.1:8790/mcp`）。**桥本身要先跑起来**（见下面「三分钟跑起来」）。
+
+| 项目 | 内容 |
+|---|---|
+| 能力分类 | 开发与运维 |
+| 一句话价值 | 让 DSH 直接加载、编译、断点调试 VS 的 C++ 工程，不需要装 VSIX、不用 VS 开着、不会被弹窗卡住 |
+| 插件形态 | 配置型 bundle：`cordis.patch.yml` 注入 `@deepseek-ai/dsh-mcp-client`，业务在独立的 .NET 桥进程里 |
+| 兼容与运行要求 | DSH（任意近期版本）+ **Windows**；需要 .NET 9 SDK、VS 2022 C++ 工具链（MSBuild）、Windows SDK 的 Debugging Tools（cdb.exe） |
+| 许可证 | MIT |
+| 外部服务 | 只连本机 `127.0.0.1:8790`；无遥测、不上传数据 |
+
+> 如果你已经**手动**在 `~/.dsh/cordis.patch.yml` 里加了 `serverName: vs` 的 MCP 配置，先删掉那一条再装插件，
+> 否则会出现两个同名 server。
 
 **TL;DR（三条命令）**
 
@@ -84,7 +105,9 @@ git clone https://gh.223456.xyz/github.com/aaalzk/dsh2vs.git
 # C. 不想用 git：浏览器打开仓库 → Code → Download ZIP
 ```
 
-> 镜像 `https://gh.223456.xyz/` 由本项目作者自建，用于国内网络加速。
+> 镜像 `https://gh.223456.xyz/` 是**本项目作者搭建的一个加速服务**：它跑的是第三方开源的 GitHub 代理
+> 镜像程序（Docker 镜像由该上游项目提供，非本项目自行开发或构建），作者只负责部署和带宽，不对其
+> 实现与安全性背书。不方便走第三方时请直连 GitHub 或用 ZIP 下载。
 > 已验证支持 `git clone` / `git ls-remote` / raw 原始文件下载；**网页浏览不支持**（会返回 400），
 > 看网页请走正常 GitHub。用法就是把 `https://github.com/...` 换成 `https://gh.223456.xyz/github.com/...`。
 
@@ -130,6 +153,16 @@ curl.exe http://127.0.0.1:8790/healthz
 > `status` 是 `degraded` 说明没找到 MSBuild —— 见「常见问题」第 2 条。
 
 ### 第 4 步：接到 DSH
+
+**方式 A（推荐）：装成插件，自动接好**
+
+```powershell
+dsh plugin --profile web add github:aaalzk/dsh2vs
+```
+
+插件的 `cordis.patch.yml` 会替你做下面这段配置，重启会话即可。
+
+**方式 B：手动改配置**
 
 编辑 `~/.dsh/cordis.patch.yml`，在顶层追加：
 
@@ -411,7 +444,10 @@ scripts/            start.ps1 / install-service.ps1 / watchdog.ps1
 
 ## 加速访问 GitHub
 
-本项目的镜像由作者维护：**<https://gh.223456.xyz/>**
+本项目作者搭建了一个加速服务：**<https://gh.223456.xyz/>**
+
+服务本身只是**部署**：跑的是第三方开源的 GitHub 代理镜像程序，Docker 镜像来自该上游项目，
+非本项目开发或构建，作者只提供部署与带宽，不对其实现与安全性背书。
 
 ```powershell
 git clone https://gh.223456.xyz/github.com/aaalzk/dsh2vs.git

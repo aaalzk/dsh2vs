@@ -1,0 +1,11 @@
+# dsh2vs is a bridge, not an in-process agent: this bundle only wires the already-installed
+# MCP client row to the dsh2vs HTTP endpoint (see README "安装" for how to start the service).
+# `failOnStartupError: true` makes a missing service a loud error instead of silent tool loss.
+- insert:
+    - id: dsh2vs
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: vs
+        transport: streamable-http
+        url: http://127.0.0.1:8790/mcp
+        failOnStartupError: true
