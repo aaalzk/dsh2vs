@@ -29,13 +29,50 @@ public sealed partial class DbgEngSession : IDebugSession
         _control = control;
         _capture = capture;
         Target = target;
-        TargetPid = pid;
+        _pid = pid;
         LastUsedAt = DateTimeOffset.UtcNow;
     }
 
     public string Target { get; }
 
-    public int? TargetPid { get; private set; }
+    private int? _pid;
+
+    /// <summary>
+    /// Resolved on demand from the engine's process listing (". 0 id: 16f4 create name: exe"),
+    /// because asking right after the initial break can come back empty.
+    /// </summary>
+    public int? TargetPid
+    {
+        get
+        {
+            _pid ??= ResolvePid();
+            return _pid;
+        }
+    }
+
+    private int? ResolvePid()
+    {
+        try
+        {
+            _capture.Take();
+            _control.Execute(DEBUG_OUTCTL.THIS_CLIENT, "|", DEBUG_EXECUTE.DEFAULT);
+            var listing = _capture.Take();
+
+            Console.Error.WriteLine("[dbgeng] pid listing = [" + listing.Replace("\r", " ").Replace("\n", " | ") + "]");
+            var match = System.Text.RegularExpressions.Regex.Match(listing, @"id:\s*(?<pid>[0-9a-fA-F]+)");
+            if (match.Success &&
+                int.TryParse(match.Groups["pid"].Value, System.Globalization.NumberStyles.HexNumber, null, out var pid))
+            {
+                return pid;
+            }
+        }
+        catch
+        {
+            // engine already gone
+        }
+
+        return null;
+    }
 
     public DebuggerState State { get; private set; } = DebuggerState.Stopped;
 
@@ -119,17 +156,10 @@ public sealed partial class DbgEngSession : IDebugSession
     private void WaitInitial()
     {
         _control.WaitForEvent((DEBUG_WAIT)0, 30000);
-        var boot = _capture.Take();
 
-        // dbgeng prints "(<pid>.<tid>): ..." on the first event; that is the only pid we get for free.
-        var match = System.Text.RegularExpressions.Regex.Match(boot, @"\((?<pid>[0-9a-f]{1,8})\.[0-9a-f]{1,8}\)");
-        if (match.Success &&
-            int.TryParse(match.Groups["pid"].Value, System.Globalization.NumberStyles.HexNumber, null, out var pid))
-        {
-            TargetPid = pid;
-        }
+        // Consume the startup banner; the pid is resolved lazily by TargetPid when it is needed.
+        _capture.Take();
     }
-
     public Task<CdbResult> ExecuteAsync(string command, TimeSpan timeout, CancellationToken cancellationToken)
         => Task.Run(() =>
         {
@@ -238,10 +268,18 @@ public sealed partial class DbgEngSession : IDebugSession
 
     public ValueTask DisposeAsync()
     {
+        // Resolve the pid BEFORE detaching: after "q" the engine is gone and the listing is empty,
+        // which is exactly how an orphaned debuggee used to survive a debug_stop.
+        var pid = TargetPid;
+
         try
         {
             if (!HasExited)
             {
+                // ".kill" terminates the debuggee through the engine. TerminateProcess from outside
+                // is not enough: the target's threads are suspended by the debugger, so the process
+                // survives an outside kill and only the engine can end it cleanly.
+                _control.Execute(DEBUG_OUTCTL.THIS_CLIENT, ".kill", DEBUG_EXECUTE.DEFAULT);
                 _control.Execute(DEBUG_OUTCTL.THIS_CLIENT, "q", DEBUG_EXECUTE.DEFAULT);
             }
         }
@@ -250,22 +288,48 @@ public sealed partial class DbgEngSession : IDebugSession
             // best effort
         }
 
-        // The engine sometimes leaves the target behind (especially while it is still running),
-        // and an orphaned debuggee is exactly what this bridge exists to avoid.
-        if (TargetPid is int pid)
+        // Belt and braces: if anything is still alive, end it.
+        if (pid is int targetPid)
         {
             try
             {
-                using var process = System.Diagnostics.Process.GetProcessById(pid);
+                using var process = System.Diagnostics.Process.GetProcessById(targetPid);
                 if (!process.HasExited)
                 {
-                    process.Kill(entireProcessTree: true);
+                    try
+                    {
+                        process.Kill(entireProcessTree: true);
+                    }
+                    catch
+                    {
+                        Native.Kill(targetPid);
+                    }
                 }
             }
             catch
             {
                 // already gone
             }
+        }
+
+        // Releasing the wrappers closes the engine's process handle; without this the dead debuggee
+        // keeps showing up in the process list (it is exited, but the object is not reaped yet).
+        try
+        {
+            (_control as IDisposable)?.Dispose();
+        }
+        catch
+        {
+            // ignore
+        }
+
+        try
+        {
+            (_client as IDisposable)?.Dispose();
+        }
+        catch
+        {
+            // ignore
         }
 
         HasExited = true;
@@ -393,5 +457,11 @@ public sealed partial class DbgEngSession : IDebugSession
         }
     }
 }
+
+
+
+
+
+
 
 

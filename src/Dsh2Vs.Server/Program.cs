@@ -32,6 +32,7 @@ builder.Services.AddSingleton<MsBuildRunner>();
 builder.Services.AddSingleton<VsState>();
 builder.Services.AddSingleton<CdbLocator>();
 builder.Services.AddSingleton<CrashAnalyzer>();
+builder.Services.AddSingleton<CrashForensics>();
 builder.Services.AddSingleton<DebugSessionManager>();
 builder.Services.AddSingleton<VsDteClient>();
 
@@ -53,5 +54,6 @@ app.MapGet("/healthz", (VsState state) => Results.Json(state.Health()));
 app.MapMcp("/mcp");
 
 app.Run();
+
 
 

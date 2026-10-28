@@ -16,13 +16,20 @@ public sealed class DebugTools
     private readonly DebugSessionManager _debug;
     private readonly DebugOptions _options;
     private readonly CrashAnalyzer _analyzer;
+    private readonly CrashForensics _forensics;
 
-    public DebugTools(VsState state, DebugSessionManager debug, DebugOptions options, CrashAnalyzer analyzer)
+    public DebugTools(
+        VsState state,
+        DebugSessionManager debug,
+        DebugOptions options,
+        CrashAnalyzer analyzer,
+        CrashForensics forensics)
     {
         _state = state;
         _debug = debug;
         _options = options;
         _analyzer = analyzer;
+        _forensics = forensics;
     }
 
     [McpServerTool(Name = "dump_save")]
@@ -322,6 +329,8 @@ public sealed class DebugTools
             cdb = _debug.CdbPath,
             active = session is not null,
             target = session?.Target,
+            targetPid = session?.TargetPid,
+            engine = _options.Engine,
             state = session?.State.ToString().ToLowerInvariant() ?? "idle",
             idleSeconds = session is null ? (int?)null : (int)(DateTimeOffset.UtcNow - session.LastUsedAt).TotalSeconds,
             idleTimeoutMinutes = _options.IdleTimeoutMinutes,
@@ -508,6 +517,30 @@ public sealed class DebugTools
         var exited = session?.HasExited == true || state == "exited";
         var code = session?.ExitCode;
 
+        // A crash should arrive with its evidence attached, not as a stack the caller has to interpret.
+        object? forensics = null;
+        if (_options.AutoForensics &&
+            session is not null &&
+            !exited &&
+            state == "stopped" &&
+            action is "continue" or "step" or "debug_execute" &&
+            IsCrashStop(text))
+        {
+            var captured = await _forensics.CaptureAsync(session, text, CancellationToken.None).ConfigureAwait(false);
+            if (captured is not null)
+            {
+                forensics = new
+                {
+                    exceptionCode = captured.Report.ExceptionCode,
+                    exceptionName = captured.Report.ExceptionName,
+                    faultingSymbol = captured.Report.FaultingSymbol,
+                    module = captured.Report.ModuleName,
+                    dumpPath = captured.DumpPath,
+                    reportPath = captured.ReportPath,
+                };
+            }
+        }
+
         return Json.Serialize(new
         {
             ok = true,
@@ -517,8 +550,38 @@ public sealed class DebugTools
             exitCode = exited ? code : null,
             exitCodeHex = exited && code is int c ? $"0x{c:X8}" : null,
             diagnosis = exited ? DescribeExit(code) : null,
+            forensics,
             text = Trim(text, MaxText),
         });
+    }
+
+    /// <summary>
+    /// True when the stop looks like an exception rather than a breakpoint. 0x80000003 is the
+    /// loader breakpoint and explicitly not a crash.
+    /// </summary>
+    private static bool IsCrashStop(string text)
+    {
+        if (text.Contains("Breakpoint", StringComparison.OrdinalIgnoreCase) &&
+            !text.Contains("second chance", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (text.Contains("(second chance)", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        foreach (System.Text.RegularExpressions.Match match in System.Text.RegularExpressions.Regex.Matches(
+                     text, @"code (?<code>[0-9a-fA-F]{8})"))
+        {
+            if (!match.Groups["code"].Value.Equals("80000003", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return text.Contains("Access violation", StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task<(bool Ok, string Text, string? Error)> ExecuteAsync(string command, int timeoutMs)
@@ -633,4 +696,5 @@ public sealed class DebugTools
 
     private static string Error(Exception ex) => Error(ex.Message);
 }
+
 

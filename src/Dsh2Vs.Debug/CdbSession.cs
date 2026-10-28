@@ -185,7 +185,7 @@ public sealed class CdbSession : IDebugSession
             TargetPid = TryParsePid(Snapshot());
         }
 
-        if (TargetPid is int pid && Native.DebugBreakProcess(pid))
+        if (TargetPid is int pid && Native.BreakIntoProcess(pid))
         {
             var stopped = await WaitForPromptAsync(promptBefore, settleTimeout, cancellationToken).ConfigureAwait(false);
             if (stopped)
@@ -446,4 +446,5 @@ public sealed class CdbSession : IDebugSession
         _process.Dispose();
     }
 }
+
 

@@ -1,17 +1,16 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 
 namespace Dsh2Vs.Debug;
 
 /// <summary>
-/// Outside-the-box interrupt for debuggees that cannot process a queued cdb command
-/// (a thread parked in a modal message loop, for example).
+/// A few kernel32 calls the debugger needs but .NET does not expose:
+/// interrupting a target parked in a modal loop, and killing a debuggee the engine refuses to release.
 /// </summary>
 internal static class Native
 {
     private const uint ProcessAllAccess = 0x1F0FFF;
-    private const uint MinimalBreakRights = 0x0002 /*VM_WRITE*/ | 0x0008 /*VM_OPERATION*/
-                                             | 0x0010 /*CREATE_THREAD*/ | 0x0020 /*QUERY_INFO*/
-                                             | 0x0400 /*QUERY_INFORMATION*/ | 0x0800 /*SUSPEND_RESUME*/;
+    private const uint ProcessTerminate = 0x0001;
+    private const uint MinimalBreakRights = 0x0002 | 0x0008 | 0x0010 | 0x0020 | 0x0400 | 0x0800;
 
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern IntPtr OpenProcess(uint desiredAccess, bool inheritHandle, int processId);
@@ -20,9 +19,13 @@ internal static class Native
     private static extern bool DebugBreakProcess(IntPtr process);
 
     [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool TerminateProcess(IntPtr process, uint exitCode);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool CloseHandle(IntPtr handle);
 
-    public static bool DebugBreakProcess(int processId)
+    /// <summary>Injects a breakpoint from outside, for a target that never reads the debugger queue.</summary>
+    public static bool BreakIntoProcess(int processId)
     {
         var handle = OpenProcess(ProcessAllAccess, false, processId);
         if (handle == IntPtr.Zero)
@@ -38,6 +41,25 @@ internal static class Native
         try
         {
             return DebugBreakProcess(handle);
+        }
+        finally
+        {
+            CloseHandle(handle);
+        }
+    }
+
+    /// <summary>Last-resort kill for a debuggee the engine leaves running after its quit command.</summary>
+    public static bool Kill(int processId)
+    {
+        var handle = OpenProcess(ProcessTerminate, false, processId);
+        if (handle == IntPtr.Zero)
+        {
+            return false;
+        }
+
+        try
+        {
+            return TerminateProcess(handle, 1);
         }
         finally
         {

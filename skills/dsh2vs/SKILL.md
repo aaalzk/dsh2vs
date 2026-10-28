@@ -100,6 +100,23 @@ debug_preflight executable=build\bin\Debug\ZoneServer.exe
 
 ## 4. 崩溃取证
 
+**默认已经自动化**：`debug_continue` / `debug_step` 一旦发现目标停在异常上（不是普通断点），会自己
+写 minidump、分析异常记录、落一份 markdown 报告，并在返回里带一个 `forensics` 块：
+
+```json
+"forensics": {
+  "exceptionCode": "0xc0000005", "exceptionName": "access violation",
+  "faultingSymbol": "loopy!main+0x16d",
+  "dumpPath": "...\\dumps\\loopy-20261028-114950.dmp",
+  "reportPath": "...\\reports\\crash-loopy-20261028-114950.md"
+}
+```
+
+拿到 `reportPath` 就可以直接把报告内容讲给用户，不必再手工 `dump_save` + `crash_analyze`。
+需要关掉（省磁盘）：`Dsh2Vs:Debug:AutoForensics=false`。
+
+手工流程仍然可用：
+
 想在**第一时间**停在崩溃点（而不是等 Windows 错误报告）：
 
 ```

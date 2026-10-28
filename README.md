@@ -372,6 +372,9 @@ dotnet run --project src\Dsh2Vs.Server -- `
 | `Dsh2Vs:Workspaces` | 空 | 额外的命名工作区数组，`[{ "name": "...", "path": "..." }]` |
 | `Dsh2Vs:WorkspacesFile` | `%LOCALAPPDATA%\dsh2vs\workspaces.json` | 工作区配置文件路径 |
 | `Dsh2Vs:Debug:SymbolServer` | 空 | 符号服务器链（如 `srv*C:\symbols*https://msdl.microsoft.com/download/symbols`）。**默认留空**：一旦配置，`!analyze -v` 才会联网拉系统符号，会明显变慢 |
+| `Dsh2Vs:Debug:Engine` | `cdb` | 调试后端：`cdb`（子进程，故障隔离）或 `dbgeng`（进程内，少一次进程跳转） |
+| `Dsh2Vs:Debug:AutoForensics` | `true` | 目标停在异常上时自动 `dump` + 分析 + 写报告（`%LOCALAPPDATA%\dsh2vs\reports`） |
+| `Dsh2Vs:Debug:ForensicsDirectory` | 空 | 崩溃报告目录，默认同上 |
 
 ## 安全边界
 
@@ -397,8 +400,9 @@ scripts/            start.ps1 / install-service.ps1 / watchdog.ps1
 - ✅ **M2（beta）** cdb 调试：启动/附加、断点、单步、栈、变量、求值、线程、模块、内存
 - ✅ **M3** 崩溃取证：`dump_save`、`crash_analyze`、`debug_open_dump`（以异常记录为准，秒级返回）
 - ✅ **M4（beta）** VS 联动：`vs_dte_*` —— 读 VS 状态、在 VS 里开解决方案、驱动 VS 构建、读错误列表、调试交接
-- ⬜ **M5（可选）** dbgeng 进程内引擎：去掉文本解析、拿结构化栈与变量。代价是调试引擎崩溃会连带服务，
-  而当前 cdb 子进程有天然故障隔离（桥活着，重启会话即可）
+- ⬜ **M5（可选，已实现可切换）** dbgeng 进程内引擎：`--Dsh2Vs:Debug:Engine=dbgeng` 即可切换。
+  去掉子进程与提示符解析，拿结构化控制；代价是引擎崩溃会连带服务，所以默认仍是 cdb（子进程有故障隔离）。
+  停止时用引擎自身的 `.kill` 终止目标（`HasExited=true`），但那个已终止的进程对象要等服务退出才从列表消失，属正常现象
 
 ## 反馈
 

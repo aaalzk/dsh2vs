@@ -25,6 +25,15 @@ public sealed class DebugOptions
     /// </summary>
     public string Engine { get; set; } = "cdb";
 
+    /// <summary>
+    /// When the target stops on an exception, automatically write a minidump, analyse it and drop a
+    /// markdown report (see CrashForensics). Costs one dump per crash, so it can be turned off.
+    /// </summary>
+    public bool AutoForensics { get; set; } = true;
+
+    /// <summary>Where crash reports go. Defaults to %LOCALAPPDATA%\dsh2vs\reports.</summary>
+    public string? ForensicsDirectory { get; set; }
+
     /// <summary>Optional symbol path; when null the debugger keeps its default.</summary>
     public string? SymbolPath { get; set; }
 
