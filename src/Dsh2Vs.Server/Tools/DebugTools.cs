@@ -339,8 +339,10 @@ public sealed class DebugTools
 
     [McpServerTool(Name = "debug_break")]
     [Description(
-        "Interrupt a running target and wait until it stops. Works even when the target is blocked in a modal " +
-        "dialog (MessageBox / assert): if the queued .break is not processed, the bridge injects a break from outside.")]
+        "Interrupt a running target and stop it. Works even when the target is blocked in a modal dialog " +
+        "(MessageBox / assert): if the queued .break is not processed, the bridge injects a break from outside. " +
+        "It then selects the thread that is actually blocked (an injected break lands on a throwaway thread), " +
+        "returns that thread's stack, and says what the target is waiting on.")]
     public async Task<string> DebugBreak()
     {
         var session = _debug.Current;
@@ -353,6 +355,28 @@ public sealed class DebugTools
             .InterruptAsync(TimeSpan.FromSeconds(10), CancellationToken.None)
             .ConfigureAwait(false);
 
+        // All thread stacks: the injected break sits in ntdll!DbgUiRemoteBreakin, which says nothing.
+        var all = await session.ExecuteAsync("~*k 12", TimeSpan.FromSeconds(20), CancellationToken.None)
+            .ConfigureAwait(false);
+
+        var threads = ThreadStackParser.Parse(all.Text);
+        var picked = ThreadStackParser.PickInteresting(threads, result.State == DebuggerState.Stopped ? 0 : null);
+
+        string stack = string.Empty;
+        if (picked is int threadIndex)
+        {
+            var switched = await session
+                .ExecuteAsync($"~{threadIndex}s; kb 12", TimeSpan.FromSeconds(15), CancellationToken.None)
+                .ConfigureAwait(false);
+            stack = switched.Text;
+        }
+
+        ModalFinding? diagnosis = null;
+        if (session.TargetPid is int pid && result.State == DebuggerState.Stopped)
+        {
+            diagnosis = ModalDiagnosis.From(WindowProbe.Inspect(pid));
+        }
+
         return Json.Serialize(new
         {
             ok = true,
@@ -360,7 +384,51 @@ public sealed class DebugTools
             state = result.State.ToString().ToLowerInvariant(),
             promptReturned = result.PromptReturned,
             targetPid = session.TargetPid,
-            text = Trim(result.Text, 12000),
+            threadCount = threads.Count,
+            selectedThread = picked,
+            selectedThreadNote = "stack_get / locals_get now follow this thread; switch with debug_thread_switch",
+            diagnosis = diagnosis is null
+                ? null
+                : new
+                {
+                    kind = diagnosis.Kind,
+                    windowTitle = diagnosis.WindowTitle,
+                    assertion = diagnosis.AssertionText,
+                    summary = diagnosis.Summary,
+                },
+            stack = Trim(stack, 6000),
+            threads = threads.Select(t => new
+            {
+                index = t.Index,
+                id = t.SystemId,
+                top = t.Symbols.FirstOrDefault(),
+            }),
+        });
+    }
+
+    [McpServerTool(Name = "debug_thread_switch")]
+    [Description(
+        "Select a thread ('~Ns') so that stack_get / locals_get / evaluate act on it. " +
+        "Thread indices come from debug_break (or threads_get).")]
+    public async Task<string> DebugThreadSwitch(
+        [Description("Thread index as shown by threads_get / debug_break.")] int threadIndex)
+    {
+        var session = _debug.Current;
+        if (session is null)
+        {
+            return Error("No active debug session. Call debug_launch or debug_attach first.");
+        }
+
+        var result = await session
+            .ExecuteAsync($"~{threadIndex}s; .echo selected", TimeSpan.FromSeconds(10), CancellationToken.None)
+            .ConfigureAwait(false);
+
+        return Json.Serialize(new
+        {
+            ok = result.PromptReturned,
+            selectedThread = threadIndex,
+            state = result.State.ToString().ToLowerInvariant(),
+            text = Trim(result.Text, 600),
         });
     }
 
@@ -431,9 +499,16 @@ public sealed class DebugTools
 
     [McpServerTool(Name = "stack_get")]
     [Description("Return the call stack as structured frames: symbol, source file and line.")]
-    public async Task<string> StackGet([Description("Maximum frames. Default 16.")] int frames = 16)
+    public async Task<string> StackGet(
+        [Description("Maximum frames. Default 16.")] int frames = 16,
+        [Description("Thread index to read (see threads_get / debug_break). Default: current thread.")]
+        int? threadId = null)
     {
-        var (ok, text, error) = await ExecuteAsync($"kb {Math.Clamp(frames, 1, 200)}", 30000).ConfigureAwait(false);
+        var command = threadId is int t
+            ? $"~{t}s; kb {Math.Clamp(frames, 1, 200)}"
+            : $"kb {Math.Clamp(frames, 1, 200)}";
+
+        var (ok, text, error) = await ExecuteAsync(command, 30000).ConfigureAwait(false);
         if (!ok)
         {
             return Error(error);
@@ -442,6 +517,7 @@ public sealed class DebugTools
         return Json.Serialize(new
         {
             ok = true,
+            threadId = threadId,
             frames = CdbParsers.ParseStack(text),
             text = Trim(text, 6000),
         });
@@ -449,8 +525,9 @@ public sealed class DebugTools
 
     [McpServerTool(Name = "locals_get")]
     [Description("Show local variables of the current frame with their types ('dv /t /v').")]
-    public Task<string> LocalsGet() =>
-        Run("dv /t /v", 15000, "locals_get");
+    public Task<string> LocalsGet(
+        [Description("Thread index to read. Default: current thread.")] int? threadId = null)
+        => Run(threadId is int t ? $"~{t}s; dv /t /v" : "dv /t /v", 15000, "locals_get");
 
     [McpServerTool(Name = "evaluate")]
     [Description("Evaluate a C++ expression in the current frame ('??'). Returns the parsed value plus raw output.")]
@@ -549,10 +626,46 @@ public sealed class DebugTools
             promptReturned,
             exitCode = exited ? code : null,
             exitCodeHex = exited && code is int c ? $"0x{c:X8}" : null,
-            diagnosis = exited ? DescribeExit(code) : null,
+            diagnosis = exited ? DescribeExit(code) : DiagnoseStuck(state),
             forensics,
             text = Trim(text, MaxText),
         });
+    }
+
+    /// <summary>
+    /// When a run command times out, the process is usually fine and simply busy - or it is sitting in a
+    /// modal dialog nobody can answer. Say which, instead of leaving the caller to guess.
+    /// </summary>
+    private object? DiagnoseStuck(string state)
+    {
+        if (!string.Equals(state, "running", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        if (_debug.Current?.TargetPid is not int pid)
+        {
+            return null;
+        }
+
+        var diagnosis = ModalDiagnosis.From(WindowProbe.Inspect(pid));
+        if (diagnosis is null)
+        {
+            return new
+            {
+                kind = "no-dialog",
+                summary = "target is still running and no dialog window is visible: it may simply be busy or "
+                          + "waiting on I/O. Use debug_break to see where it is.",
+            };
+        }
+
+        return new
+        {
+            kind = diagnosis.Kind,
+            windowTitle = diagnosis.WindowTitle,
+            assertion = diagnosis.AssertionText,
+            summary = diagnosis.Summary,
+        };
     }
 
     /// <summary>
@@ -696,5 +809,7 @@ public sealed class DebugTools
 
     private static string Error(Exception ex) => Error(ex.Message);
 }
+
+
 
 

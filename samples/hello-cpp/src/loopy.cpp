@@ -2,6 +2,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <vector>
 
 #include "math_util.h"
 
@@ -24,6 +25,7 @@ int main(int argc, char** argv)
     const bool waitMode = argc > 1 && std::strcmp(argv[1], "--wait") == 0;
     const bool crashMode = argc > 1 && std::strcmp(argv[1], "--crash") == 0;
     const bool dialogMode = argc > 1 && std::strcmp(argv[1], "--dialog") == 0;
+    const bool assertMode = argc > 1 && std::strcmp(argv[1], "--assert") == 0;
 
     std::printf("loopy start (pid=%lu, argc=%d)\n",
                 static_cast<unsigned long>(GetCurrentProcessId()), argc);
@@ -44,6 +46,20 @@ int main(int argc, char** argv)
 
         volatile int* nullPointer = nullptr;
         *nullPointer = 42;
+    }
+
+    if (assertMode)
+    {
+        // Fixture for the CRT assertion dialog: in a Debug build the STL checks operator[] and pops
+        // "Debug Assertion Failed! ... vector subscript out of range" -- a modal dialog nobody can
+        // answer while running unattended.
+        std::printf("about to index a vector out of range...\n");
+        std::fflush(stdout);
+
+        std::vector<int> values;
+        values.push_back(1);
+        volatile int outOfRange = values[10];
+        std::printf("unreachable: %d\n", outOfRange);
     }
 
     if (dialogMode)

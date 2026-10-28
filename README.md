@@ -1,4 +1,4 @@
-# dsh2vs
+﻿# dsh2vs
 
 **让你的 AI 助手（DSH 或任何 MCP 客户端）能真正"动手"操作 Visual Studio 的 C++ 工程：加载项目、编译、断点调试。**
 
@@ -199,11 +199,12 @@ locals_get → int argc = 0n1 ; char ** argv = 0x0000018f`55667150 ; bool waitMo
 | `debug_launch` / `debug_attach` | 启动 exe（停在初始断点）或附加到 PID。**启动失败会返回 `ok:false` + 退出码 + 缺失依赖清单**，不再是「它退出了」 |
 | `debug_preflight` | 启动前检查依赖：读 PE 导入表，逐个在 exe 目录 / System32 / PATH 里解析，直接列缺失的 DLL（毫秒级，不起调试器） |
 | `debug_continue` / `debug_step` | 继续 / 单步（into·over·out） |
-| `debug_break` | 打断。目标卡在模态框里时 `.break` 不起作用，会自动改用 `DebugBreakProcess` 注入，并 dump 所有线程栈（能直接看到 `USER32!MessageBoxW` 那一帧） |
+| `debug_break` | 打断。卡在模态框时 `.break` 不生效，会自动用 `DebugBreakProcess` 注入；注入断点落在一次性线程上，所以它会**自动切到真正卡住的那个线程**，并给出结论式 `diagnosis`（如「CRT 断言，不是死锁」+ 断言原文） |
+| `debug_thread_switch` | 切换当前线程（`~Ns`）；之后 `stack_get` / `locals_get` / `evaluate` 都作用于它 |
 | `breakpoint_set` / `list` / `remove` | 断点，支持条件表达式；符号没加载时自动降级为 `bu` |
 | `exception_set` / `exception_list` | 异常断点：`sxe/sxd/sxn/sxi`，比如 `event=av mode=break` 让程序在第一次访问越界时就停 |
-| `stack_get` | 调用栈，解析成 `{frame, returnAddress, symbol, file, line}` |
-| `locals_get` | 局部变量（含类型与地址） |
+| `stack_get` | 调用栈，解析成 `{frame, returnAddress, symbol, file, line}`；支持 `threadId=` 单次指定线程 |
+| `locals_get` | 局部变量（含类型与地址）；支持 `threadId=` |
 | `evaluate` | C++ 表达式求值 |
 | `threads_get` / `modules_get` / `memory_read` | 线程 / 模块 / 内存 |
 | `debug_stop` | 结束会话并杀掉被调试进程（不留孤儿） |
@@ -324,7 +325,7 @@ Windows SDK 里没装 Debugging Tools。装的时候勾「Debugging Tools for Wi
 
 **10. 程序跑着跑着不动了，`debug_continue` 一直返回 `state=running`**
 多半是目标弹了个模态框（assert / MessageBox），线程卡在消息循环里。这是**被调试程序**卡住，不是桥卡住。
-调用 `debug_break`：它会注入断点并 dump 所有线程栈，你能直接看到 `USER32!MessageBoxW → 你的函数`，
+调用 `debug_break`：它会注入断点、**自动选中真正卡住的线程**并给出 `diagnosis`（弹窗标题 + 断言原文），`stack_get` 直接拿到 `USER32!MessageBoxWorker → 你的函数`，
 定位后 `debug_stop` 结束进程即可。
 
 **11. 程序一启动就退出，控制台什么输出都没有**
@@ -422,3 +423,4 @@ git clone https://gh.223456.xyz/github.com/<任意仓库>.git
 ## 许可证
 
 MIT © 2026 aaalzk
+

@@ -60,14 +60,43 @@ debug_stop                                            # 结束并杀掉被调试
 
 ## 3. 程序卡住 / 弹窗
 
-`debug_continue` 返回 `state=running` 且长时间没有停点 → 目标很可能卡在模态框（MessageBox / assert）：
+`debug_continue` 返回 `state=running` 且长时间没有停点 → 目标多半卡在模态框（MessageBox / CRT 断言）。
+
+**第一步看 `diagnosis`**：`debug_continue` 超时时已经会探测目标进程的窗口，直接给结论，不用自己 pattern-match：
+
+```json
+"diagnosis": {
+  "kind": "crt-assertion-dialog",
+  "windowTitle": "Microsoft Visual C++ Runtime Library",
+  "assertion": "File: ...\\include\\vector | Line: 1931 | Expression: vector subscript out of range",
+  "summary": "target is blocked in a modal dialog ... = CRT assertion/abort, NOT a deadlock."
+}
+```
+
+`kind` 取值：`crt-assertion-dialog`（CRT 断言）、`assertion-dialog`（其它断言）、`modal-dialog`（普通弹框）、
+`no-dialog`（没有弹框，就是忙/等 I/O —— 这时再 `debug_break` 看它卡在哪）。
+
+**第二步 `debug_break`**：它会用 `.break`，无效就用 `DebugBreakProcess` 从外部注入，然后**自动切到真正卡住的那个线程**
+（注入断点会落在一个一次性线程 `ntdll!DbgUiRemoteBreakin` 上，那个线程没有任何信息），返回：
+
+```json
+{ "state": "stopped", "threadCount": 4, "selectedThread": 0,
+  "diagnosis": { ...同上... },
+  "stack": "... USER32!MessageBoxWorker → USER32!MessageBoxA → 你的函数 ..." }
+```
+
+之后 `stack_get` / `locals_get` / `evaluate` **默认就作用在这个线程上**，不需要再手动 `~0s`。
+
+要换线程：
 
 ```
-debug_break
+threads_get                                  # 看所有线程，`.` 标记当前线程
+debug_thread_switch threadIndex=1            # 切过去
+stack_get  frames=16 threadId=1              # 或者单次指定线程
+locals_get threadId=1
 ```
 
-它会先用 `.break`，无效就用 `DebugBreakProcess` 从外部注入断点，然后 dump **所有线程**的栈。
-输出里能直接看到 `USER32!MessageBoxWorker → USER32!MessageBoxA → 你的函数`，定位后 `debug_stop` 收工。
+定位完 `debug_stop` 收工（会杀掉被调试进程，不留孤儿）。
 
 ## 3.5 程序一启动就退出 / 没有输出（缺 DLL）
 
