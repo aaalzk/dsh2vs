@@ -1,4 +1,4 @@
-﻿# dsh2vs
+# dsh2vs
 
 <!-- 收录到 dsh-plugin.org 之后放开下面这行（详情页地址见 docs/marketplace-submission.md）
 [![Listed on dsh-plugin.org](https://dsh-plugin.org/badges/listed.svg)](https://dsh-plugin.org/plugins/aaalzk/dsh2vs)
@@ -72,6 +72,27 @@ UI 线程。于是 VS 一弹模态框，调用就阻塞，只能等人点；RDP 
 | 客户端重启 | 要重新拉起 stdio 代理进程 | 固定一个 URL，一直在 |
 
 结论：**C++ 的加载、编译、调试，没有一样必须由 VS 进程提供**。桥就做桥。
+
+## 与现有 MCP 的关系（不重复造轮子）
+
+生态里已经有不少同类，我们不装作没有。这张表说明**边界**，也说明什么时候该用谁：
+
+| 项目 | 它擅长 | 什么时候用它 | 与本项目的关系 |
+|---|---|---|---|
+| [mcp-windbg](https://github.com/svnscha/mcp-windbg) | 包一层 `cdb`/`kd`：dump 深度分析、用户态远程调试、内核调试、TTD | 已经拿到 dump、要深挖 | **调试原语重叠**，它比我们深 |
+| **微软官方 WinDbg MCP**（WinDbg `1.2610.1001.0+` 内置） | 在 WinDbg 界面里用自然语言调试 | 人就坐在 WinDbg 前面 | 需要 GUI 交互，**无人值守用不了** ← 我们的位置 |
+| [VS-MCPServer](https://github.com/CodingWithCalvin/VS-MCPServer) | VS 扩展，暴露 solution / document / 编辑类工具 | 想让 AI 操作**开着的** VS | 进程内，VS 必须运行 |
+| [VS IDE Bridge](https://github.com/RenegadeRiff86/Visual-Studio-MCP) | VS 扩展 + 后台服务，读写代码、看错误、跑构建 | 同上 | 进程内，要求 VS 2022 17.14+ 运行中 |
+| [msbuild-mcp-server](https://github.com/zenoengine/msbuild-mcp-server) | 纯 MSBuild 构建，自动找 MSBuild | 只想编译 | **构建原语重叠**，但没有"编译完接着调试" |
+| **dsh2vs** | 从 `.sln` 出发的**无人值守闭环**：解析配置/平台 → 构建 → 找到输出的 exe → 起调试器 → 断点/栈/变量 → 崩溃取证 | 机器前没人、不能弹窗、不能开 VS | 见下 |
+
+三条只有我们做的：
+
+1. **不依赖任何 GUI**。不是"VS 关掉也能连"，而是整条链路都不碰 VS —— 构建走 MSBuild CLI，调试走 cdb 子进程。
+2. **工程感知**。别人给你 debugger，你得自己告诉它 exe 在哪；我们从解决方案和配置推出来。
+3. **诊断层**：启动失败直接给 `0xC0000135` + 缺哪个 DLL（PE 导入表预检）；卡在弹窗直接判定"CRT 断言，不是死锁"并摘出断言原文；崩溃自动 dump + 报告。
+
+反过来说清楚：**如果你只想要"会跑 cdb 的 MCP"，那别用本项目** —— `mcp-windbg` 更成熟（1700+ star、PyPI 分发、支持内核与 TTD）。本项目把自己定位在"没人能点按钮的那台机器上"。
 
 ## 你需要什么
 

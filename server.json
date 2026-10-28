@@ -1,0 +1,23 @@
+﻿{
+    "$schema":  "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+    "name":  "io.github.aaalzk/dsh2vs",
+    "title":  "dsh2vs — Visual Studio C++ bridge",
+    "description":  "Build and debug VS C++ unattended: MSBuild, cdb breakpoints, crash verdicts. No VS needed.",
+    "repository":  {
+                       "url":  "https://github.com/aaalzk/dsh2vs",
+                       "source":  "github"
+                   },
+    "version":  "0.1.0",
+    "packages":  [
+                     {
+                         "registryType":  "mcpb",
+                         "identifier":  "https://github.com/aaalzk/dsh2vs/releases/download/v0.1.0/dsh2vs-0.1.0.mcpb",
+                         "fileSha256":  "0000000000000000000000000000000000000000000000000000000000000000",
+                         "version":  "0.1.0",
+                         "transport":  {
+                                           "type":  "streamable-http",
+                                           "url":  "http://127.0.0.1:8790/mcp"
+                                       }
+                     }
+                 ]
+}
