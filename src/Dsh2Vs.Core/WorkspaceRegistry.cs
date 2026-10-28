@@ -21,6 +21,7 @@ public sealed record WorkspaceInfo(string Name, string Path);
 public sealed class WorkspaceRegistry
 {
     private readonly List<WorkspaceInfo> _items = new();
+    private readonly object _gate = new();
     private string _currentName = "default";
 
     public WorkspaceRegistry(Dsh2VsOptions options)
@@ -147,6 +148,81 @@ public sealed class WorkspaceRegistry
                         ?? throw new InvalidOperationException("No workspace is configured.");
 
         return Path.GetFullPath(Path.Combine(workspace.Path, path));
+    }
+
+    /// <summary>
+    /// Registers a directory at runtime and persists it, so adding a workspace is a tool call
+    /// instead of "find the config file, edit JSON, restart the service".
+    /// </summary>
+    public WorkspaceInfo AddWorkspace(string path, string? name = null)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            throw new ArgumentException("path is required", nameof(path));
+        }
+
+        var full = SafeFullPath(path);
+        if (!Directory.Exists(full))
+        {
+            throw new DirectoryNotFoundException($"Directory not found: {full}");
+        }
+
+        lock (_gate)
+        {
+            var existing = _items.FirstOrDefault(i => i.Path.Equals(full, StringComparison.OrdinalIgnoreCase));
+            if (existing is not null)
+            {
+                return existing;
+            }
+
+            Add(name, full);
+            Persist();
+            return _items[^1];
+        }
+    }
+
+    /// <summary>Removes a workspace by name and persists the change. The last one cannot be removed.</summary>
+    public bool RemoveWorkspace(string name)
+    {
+        lock (_gate)
+        {
+            var item = _items.FirstOrDefault(i => i.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+            if (item is null || _items.Count <= 1)
+            {
+                return false;
+            }
+
+            _items.Remove(item);
+            if (_currentName.Equals(item.Name, StringComparison.OrdinalIgnoreCase))
+            {
+                _currentName = _items[0].Name;
+            }
+
+            Persist();
+            return true;
+        }
+    }
+
+    /// <summary>Writes the effective list back to the workspaces file.</summary>
+    private void Persist()
+    {
+        var payload = _items
+            .Select(i => new WorkspaceEntry { Name = i.Name, Path = i.Path })
+            .ToList();
+
+        var directory = Path.GetDirectoryName(WorkspacesFile);
+        if (!string.IsNullOrEmpty(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        File.WriteAllText(
+            WorkspacesFile,
+            JsonSerializer.Serialize(payload, new JsonSerializerOptions
+            {
+                WriteIndented = true,
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            }));
     }
 
     private void Add(string? name, string? path)

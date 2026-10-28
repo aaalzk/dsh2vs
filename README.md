@@ -252,6 +252,8 @@ locals_get → int argc = 0n1 ; char ** argv = 0x0000018f`55667150 ; bool waitMo
 
 ```
 workspace_list                         # 看有哪些根、当前是哪个
+workspace_add   path=D:\openclaw       # 加一个（立即生效并写回文件，不用重启、不用找配置文件）
+workspace_remove name=openclaw         # 删一个（最后一个不能删）
 workspace_use  name=zoneserver         # 切换默认工作区
 project_open   path=build\Tianyuan4590.sln workspace=zoneserver   # 单次指定
 debug_launch   executable=build\bin\Debug\ZoneServer.exe workspace=zoneserver

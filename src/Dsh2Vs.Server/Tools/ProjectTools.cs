@@ -30,7 +30,29 @@ public sealed class ProjectTools
         [Description("Workspace name (from workspace_list) used to resolve a relative path. Optional.")]
         string? workspace = null)
     {
-        var full = _state.ResolvePath(path, workspace);
+        string full;
+        try
+        {
+            full = _state.ResolvePath(path, workspace);
+        }
+        catch (Exception ex)
+        {
+            // Say where the relative path was resolved, otherwise "file not found" is unhelpful.
+            var baseDir = _state.Workspaces.Find(workspace) ?? _state.Workspaces.Current;
+            return Json.Serialize(new
+            {
+                ok = false,
+                error = ex.Message,
+                requested = path,
+                workspace = baseDir?.Name,
+                workspacePath = baseDir?.Path,
+                resolved = Path.IsPathRooted(path)
+                    ? path
+                    : Path.Combine(baseDir?.Path ?? string.Empty, path),
+                hint = "Check workspace_list for the available roots, or pass an absolute path.",
+            });
+        }
+
         var extension = Path.GetExtension(full);
 
         SolutionInfo info;
