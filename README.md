@@ -384,6 +384,8 @@ scripts/            start.ps1 / install-service.ps1 / watchdog.ps1
 - ✅ **M2（beta）** cdb 调试：启动/附加、断点、单步、栈、变量、求值、线程、模块、内存
 - ✅ **M3** 崩溃取证：`dump_save`、`crash_analyze`、`debug_open_dump`（以异常记录为准，秒级返回）
 - ✅ **M4（beta）** VS 联动：`vs_dte_*` —— 读 VS 状态、在 VS 里开解决方案、驱动 VS 构建、读错误列表、调试交接
+- ⬜ **M5（可选）** dbgeng 进程内引擎：去掉文本解析、拿结构化栈与变量。代价是调试引擎崩溃会连带服务，
+  而当前 cdb 子进程有天然故障隔离（桥活着，重启会话即可）
 
 ## 反馈
 
