@@ -9,6 +9,12 @@
 
 不装 VS 插件，不需要 Visual Studio 开着，不会弹出「项目已过期，是否重新生成」这种没人点的对话框。
 
+> ### ⚠️ 非官方、独立第三方项目
+> dsh2vs 是独立开发者 [aaalzk](https://github.com/aaalzk) 的个人项目，**与 DeepSeek AI、Microsoft 以及
+> Model Context Protocol 项目均无隶属关系，也未获其认可或背书**。
+> 名字里的 "dsh" 指 DeepSeek Harness（它对接的工具）、"vs" 指 Visual Studio（它驱动的对象）——
+> 两者都只是**被本项目从外部调用的第三方产品**。本项目不发行、不代表、不打包其中任何一个。
+
 ---
 
 ## 安装：两步，先起桥，再接 DSH

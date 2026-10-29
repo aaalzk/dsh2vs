@@ -1,7 +1,7 @@
 {
   "name": "dsh2vs",
-  "version": "0.1.0",
-  "description": "DSH plugin: connect the dsh2vs bridge to build and debug Visual Studio C++ projects (MSBuild + cdb) without a VSIX or a running Visual Studio.",
+  "version": "0.1.1",
+  "description": "Unofficial, independent third-party plugin (not affiliated with DeepSeek AI or Microsoft). Build and debug Visual Studio C++ projects via MSBuild + cdb — no VSIX, no running Visual Studio.",
   "license": "MIT",
   "type": "module",
   "exports": {

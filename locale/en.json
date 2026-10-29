@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "dsh2vs — Visual Studio C++ bridge",
-    "description": "Loads solutions, builds with MSBuild, debugs with cdb and analyses crashes on a Visual Studio C++ workstation, without a VSIX and without Visual Studio being open."
+    "title": "dsh2vs — VS C++ bridge (unofficial)",
+    "description": "Unofficial third-party plugin, not affiliated with DeepSeek AI or Microsoft. Loads solutions, builds with MSBuild, debugs with cdb and analyses crashes on a Visual Studio C++ workstation — without a VSIX and without Visual Studio being open."
   }
 }

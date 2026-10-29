@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "dsh2vs — Visual Studio C++ 桥",
-    "description": "在 VS C++ 工作站上加载解决方案、用 MSBuild 编译、用 cdb 断点调试并做崩溃取证；不需要装 VSIX，也不需要 Visual Studio 开着。"
+    "title": "dsh2vs — VS C++ 桥（非官方）",
+    "description": "非官方第三方插件，与 DeepSeek AI、Microsoft 无隶属关系。在 VS C++ 工作站上加载解决方案、用 MSBuild 编译、用 cdb 断点调试并做崩溃取证；不需要装 VSIX，也不需要 Visual Studio 开着。"
   }
 }

@@ -9,6 +9,13 @@
 
 No VSIX. No Visual Studio required. No "project is out of date, rebuild?" dialog waiting for someone to click it.
 
+> ### ⚠️ Unofficial, independent third-party project
+> dsh2vs is a personal project by an independent developer, [aaalzk](https://github.com/aaalzk).
+> **It is not affiliated with, endorsed by, or derived from DeepSeek AI, Microsoft, or the Model
+> Context Protocol project.** The "dsh" in the name refers to DeepSeek Harness (the tool it talks
+> to) and "vs" to Visual Studio (the product it drives) — both are **third-party products called
+> from the outside**. This project does not ship, represent, or bundle either of them.
+
 ---
 
 ## Install: two steps — bridge first, then DSH
