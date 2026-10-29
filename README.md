@@ -1,4 +1,4 @@
-# dsh2vs
+﻿# dsh2vs
 
 **[中文](README.md) · [English](README_EN.md)**
 
@@ -53,6 +53,17 @@ git clone https://github.com/aaalzk/dsh2vs.git
 cd dsh2vs; dotnet build
 .\scripts\start.ps1 -Workspace D:\Projects\你的C++工程
 ```
+
+**C. MCPB 单文件包（给 Claude Desktop 等支持 MCPB 的客户端）**
+
+从 [Releases](https://github.com/aaalzk/dsh2vs/releases) 下载 `dsh2vs-0.1.0.mcpb`（自带 .NET 9 运行时，约 43 MB），
+直接用 Claude Desktop 打开即可；或解压后手动以 stdio 模式启动：
+
+```powershell
+.\Dsh2Vs.Server.exe --stdio
+```
+
+stdio 模式下 stdout 只走 MCP 协议，日志全部写 stderr，不会污染通信。
 
 ### 第 2 步：接到 DSH
 
@@ -151,3 +162,4 @@ git clone https://gh.223456.xyz/github.com/<任意仓库>.git
 ```
 
 支持 `git clone` / `git ls-remote` / raw 文件下载；**网页浏览不支持**（会返回 400），看网页请走原站。
+

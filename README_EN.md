@@ -1,4 +1,4 @@
-# dsh2vs
+﻿# dsh2vs
 
 **[English](README_EN.md) · [中文](README.md)**
 
@@ -54,6 +54,17 @@ git clone https://github.com/aaalzk/dsh2vs.git
 cd dsh2vs; dotnet build
 .\scripts\start.ps1 -Workspace D:\Projects\YourCppRepo
 ```
+
+**C. MCPB single-file bundle (for Claude Desktop and other MCPB-aware clients)**
+
+Download `dsh2vs-0.1.0.mcpb` from [Releases](https://github.com/aaalzk/dsh2vs/releases) (bundles the .NET 9 runtime, ~43 MB)
+and open it with Claude Desktop, or unzip and run it in stdio mode yourself:
+
+```powershell
+.\Dsh2Vs.Server.exe --stdio
+```
+
+In stdio mode stdout carries only the MCP protocol; all logging goes to stderr.
 
 ### Step 2: connect DSH
 
@@ -151,3 +162,4 @@ git clone https://gh.223456.xyz/github.com/<any-repo>.git
 ```
 
 Supports `git clone` / `git ls-remote` / raw file download. **Browsing web pages is not supported** (returns 400) — use github.com for that.
+

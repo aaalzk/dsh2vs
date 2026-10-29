@@ -12,7 +12,7 @@
     {
       "registryType": "mcpb",
       "identifier": "https://github.com/aaalzk/dsh2vs/releases/download/v0.1.0/dsh2vs-0.1.0.mcpb",
-      "fileSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "fileSha256": "47746eb03485002c98e4acbe3e3969aa8bbed85e2fb3d83d6de315b1eac2fd58",
       "version": "0.1.0",
       "transport": {
         "type": "streamable-http",
