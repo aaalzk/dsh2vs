@@ -14,30 +14,74 @@
 > An out-of-process MCP bridge that lets an AI agent load, build and debug Visual Studio C++ projects
 > without a VSIX, without Visual Studio running, and without modal dialogs blocking automation.
 
-## 作为 DSH 插件安装（一条命令）
+## 安装：两步，先起桥，再接 DSH
+
+dsh2vs 由**两个独立的部分**组成，只装一半会连上一个不存在的地址：
+
+| 部分 | 是什么 | 怎么装 |
+|---|---|---|
+| **① 桥（dsh2vs bridge）** | 一个 .NET 程序，真正调 MSBuild 编译、起 cdb 调试、分析崩溃 | 下载绿色版解压即用，或自己 `dotnet build` |
+| **② DSH 插件** | 一个纯配置包，只负责告诉 DSH「桥在 127.0.0.1:8790」 | `dsh plugin --profile web add dsh2vs` |
+
+```
+DSH  ──MCP──▶  ② 插件（6 行 YAML：告诉 DSH 打哪个号码）
+                    │
+                    ▼  HTTP
+                ① 桥（真正干活儿的 .NET 程序）
+                    ├─▶ MSBuild.exe      编译
+                    ├─▶ cdb.exe          调试
+                    └─▶ 崩溃 dump + 报告
+```
+
+### 第 1 步：起桥（二选一）
+
+**A. 绿色版（推荐，不用装 .NET SDK、不用 git、不用编译）**
+
+去 [Releases](https://github.com/aaalzk/dsh2vs/releases) 下载 `dsh2vs-win-x64.zip`，解压后运行：
+
+```powershell
+.\Dsh2Vs.Server.exe --Dsh2Vs:WorkspaceRoot=D:\Projects\你的C++工程
+```
+
+**B. 源码构建（要改代码才需要）**
+
+```powershell
+git clone https://github.com/aaalzk/dsh2vs.git
+cd dsh2vs; dotnet build
+.\scripts\start.ps1 -Workspace D:\Projects\你的C++工程
+```
+
+打开 <http://127.0.0.1:8790/healthz>，看到 `"status":"ok"` 就说明桥起来了。
+
+### 第 2 步：接到 DSH
 
 ```powershell
 dsh plugin --profile web add dsh2vs
 ```
 
-（网络不通 npm 时可用源码安装：`dsh plugin --profile web add dsh2vs`）
+（npm 不通时可用源码安装：`dsh plugin --profile web add github:aaalzk/dsh2vs`）
 
-装完重启会话，`mcp__vs__*` 那 40+ 个工具就直接可用（插件会把 MCP 连接自动接到
-`http://127.0.0.1:8790/mcp`）。**桥本身要先跑起来**（见下面「三分钟跑起来」）。
+**重启 DSH 会话**（MCP 连接只在会话启动时加载），之后 `mcp__vs__*` 那 40+ 个工具就会出现。
+技能 `dsh2vs` 会告诉你完整操作流程。
+
+> ⚠️ 只装插件、桥没起 → DSH 会**明确报错**（`failOnStartupError: true`），不会静默丢工具。
+> 所以顺序一定是：先确认 `healthz` 返回 `ok`，再装插件。
+
+### 插件信息
 
 | 项目 | 内容 |
 |---|---|
 | 能力分类 | 集成与连接（它本质是一座桥：把 DSH 接到一台 Visual Studio 工作站） |
 | 一句话价值 | 让 DSH 直接加载、编译、断点调试 VS 的 C++ 工程，不需要装 VSIX、不用 VS 开着、不会被弹窗卡住 |
 | 插件形态 | 配置型 bundle：`cordis.patch.yml` 注入 `@deepseek-ai/dsh-mcp-client`，业务在独立的 .NET 桥进程里 |
-| 兼容与运行要求 | DSH（任意近期版本）+ **Windows**；需要 .NET 9 SDK、VS 2022 C++ 工具链（MSBuild）、Windows SDK 的 Debugging Tools（cdb.exe） |
+| 兼容与运行要求 | DSH（任意近期版本）+ **Windows**；桥需要 VS 2022 C++ 工具链（MSBuild）、Windows SDK 的 Debugging Tools（cdb.exe）；**绿色版不需要 .NET SDK** |
 | 许可证 | MIT |
 | 外部服务 | 只连本机 `127.0.0.1:8790`；无遥测、不上传数据 |
 
 > 如果你已经**手动**在 `~/.dsh/cordis.patch.yml` 里加了 `serverName: vs` 的 MCP 配置，先删掉那一条再装插件，
 > 否则会出现两个同名 server。
 
-**TL;DR（三条命令）**
+**TL;DR（源码路线，三条命令）**
 
 ```powershell
 git clone https://github.com/aaalzk/dsh2vs.git    # 网络不通见「拿到代码」一节的镜像
@@ -105,8 +149,8 @@ UI 线程。于是 VS 一弹模态框，调用就阻塞，只能等人点；RDP 
 |---|---|---|
 | Windows 10/11 | 运行环境 | — |
 | Visual Studio 2022 / 2026，勾选「使用 C++ 的桌面开发」 | 提供 `MSBuild.exe`、`cl.exe` | 见下方命令 ① |
-| .NET 9 SDK 或更新 | 编译/运行本服务 | `dotnet --list-sdks` |
 | Windows SDK 的「Debugging Tools for Windows」 | 提供 `cdb.exe`（调试用） | 见下方命令 ② |
+| .NET 9 SDK | **仅源码构建需要**（用绿色版则不需要） | `dotnet --list-sdks` |
 
 ```powershell
 # ① 查 VS 是否装了 C++ 工作负载（有输出就 OK）
@@ -119,7 +163,9 @@ Test-Path "C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\cdb.exe"
 
 `cdb.exe` 没有的话：装 Windows SDK 时勾选 **Debugging Tools for Windows**；已经装了 VS 也可以单独补装。
 
-## 三分钟跑起来
+## 三分钟跑起来（源码路线细节）
+
+上面「安装」是总览，这里是**源码路线**每一步的细节。用绿色版的话，跳到「第 2 步」即可。
 
 ### 第 0 步：拿到代码
 
@@ -133,6 +179,7 @@ git clone https://github.com/aaalzk/dsh2vs.git
 git clone https://gh.223456.xyz/github.com/aaalzk/dsh2vs.git
 
 # C. 不想用 git：浏览器打开仓库 → Code → Download ZIP
+# D. 不想编译：去 Releases 下载 dsh2vs-win-x64.zip（绿色版，自带 .NET 运行时）
 ```
 
 > 镜像 `https://gh.223456.xyz/` 是**本项目作者搭建的一个加速服务**：它跑的是第三方开源的 GitHub 代理
@@ -141,7 +188,7 @@ git clone https://gh.223456.xyz/github.com/aaalzk/dsh2vs.git
 > 已验证支持 `git clone` / `git ls-remote` / raw 原始文件下载；**网页浏览不支持**（会返回 400），
 > 看网页请走正常 GitHub。用法就是把 `https://github.com/...` 换成 `https://gh.223456.xyz/github.com/...`。
 
-### 第 1 步：构建
+### 第 1 步：构建（绿色版跳过）
 
 ```powershell
 cd dsh2vs
@@ -150,8 +197,16 @@ dotnet build
 
 ### 第 2 步：启动（把路径换成你自己的 C++ 工程目录）
 
+源码路线：
+
 ```powershell
 .\scripts\start.ps1 -Workspace D:\Projects\YourCppRepo
+```
+
+绿色版（解压后直接跑，不需要 .NET SDK）：
+
+```powershell
+.\Dsh2Vs.Server.exe --Dsh2Vs:WorkspaceRoot=D:\Projects\YourCppRepo
 ```
 
 > 这个窗口会被服务占住（Ctrl+C 停止）。下一步验证请**另开一个** PowerShell 窗口。
